@@ -1,0 +1,2713 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <title>Soft Voice Notes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="theme-color" content="#f0f5f0" />
+
+  <!-- 字體：Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet"
+  />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'app-bg': '#f0f5f0',     // 背景
+            'card': '#ffffff',       // 卡片
+            'card-alt': '#dde6dd',   // 次卡片
+            'primary': '#4a7c59',    // 森林綠
+            'secondary': '#8fc1a3',  // 鼠尾草綠
+            'accent': '#c8d6af',     // 嫩芽綠
+            'text-main': '#2d4030'   // 深墨綠
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Inter', 'system-ui', 'sans-serif']
+          },
+          boxShadow: {
+            'soft-card': '0 18px 45px rgba(74, 124, 89, 0.18)'
+          }
+        }
+      }
+    };
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      -webkit-font-smoothing: antialiased;
+    }
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .hide-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen bg-app-bg text-text-main font-sans">
+  <div class="min-h-screen flex justify-center">
+    <div class="w-full max-w-md flex flex-col px-4 pt-6 pb-6 relative">
+
+      <!-- Header：標題 + 我的筆記 + 日曆 + 設定 -->
+      <header class="mb-4">
+        <div class="flex items-center justify-between gap-3">
+          <button
+            id="header-home"
+            type="button"
+            class="text-left active:opacity-80 transition-opacity"
+          >
+            <div class="text-[10px] tracking-[0.3em] uppercase text-text-main/60">
+              Talking Journal
+            </div>
+            <div class="mt-0.5 text-2xl leading-tight font-display font-black text-primary">
+              Soft Voice Notes
+            </div>
+            <div class="mt-0.5 text-[11px] text-text-main/70">
+              將腦中的千頭萬緒化為文字
+            </div>
+          </button>
+
+          <div class="flex items-center gap-2">
+            <button
+              id="header-calendar-btn"
+              type="button"
+              class="h-9 w-9 rounded-full bg-card text-text-main flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+              title="日曆"
+            >
+              <i data-lucide="calendar" class="w-4 h-4"></i>
+            </button>
+            <button
+              id="header-notes-btn"
+              type="button"
+              class="h-9 w-9 rounded-full bg-card text-text-main flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+              title="我的筆記"
+            >
+              <i data-lucide="notebook-tabs" class="w-4 h-4"></i>
+            </button>
+            <button
+              id="settings-btn"
+              type="button"
+              class="h-9 w-9 rounded-full bg-white text-black flex items-center justify-center shadow-soft-card active:scale-95 transition-transform"
+            >
+              <i data-lucide="settings" class="w-4 h-4"></i>
+              <span class="sr-only">OpenAI API 設定</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 relative overflow-hidden">
+        <!-- 視圖 1：首頁錄音 -->
+        <section
+          data-view="home"
+          class="view-screen opacity-100 transition-opacity duration-300"
+        >
+          <!-- 今日日期 -->
+          <div class="mb-4">
+            <div id="home-date" class="text-sm text-text-main/70"></div>
+          </div>
+
+          <!-- 模式選擇器 -->
+          <div class="mb-6">
+            <div class="text-[11px] uppercase tracking-[0.2em] text-text-main/60 mb-2">
+              模式
+            </div>
+            <div class="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+              <button
+                type="button"
+                class="mode-pill whitespace-nowrap px-3.5 py-1.5 rounded-full bg-primary text-white text-xs shadow-sm flex-shrink-0"
+                data-mode="summary"
+              >
+                精煉重點
+              </button>
+              <button
+                type="button"
+                class="mode-pill whitespace-nowrap px-3.5 py-1.5 rounded-full bg-card-alt text-[12px] text-text-main flex-shrink-0"
+                data-mode="verbose"
+              >
+                詳盡逐字
+              </button>
+              <button
+                type="button"
+                class="mode-pill whitespace-nowrap px-3.5 py-1.5 rounded-full bg-card-alt text-[12px] text-text-main flex-shrink-0"
+                data-mode="fun"
+              >
+                幽默風格
+              </button>
+              <button
+                type="button"
+                class="mode-pill whitespace-nowrap px-3.5 py-1.5 rounded-full bg-card-alt text-[12px] text-text-main flex-shrink-0"
+                data-mode="formal"
+              >
+                嚴肅職場
+              </button>
+            </div>
+          </div>
+
+          <!-- 主錄音按鈕 -->
+          <div class="flex flex-col items-center mt-4">
+            <div class="relative">
+              <button
+                id="record-btn"
+                type="button"
+                class="inline-flex items-center justify-center rounded-full bg-primary text-white w-32 h-32 shadow-soft-card transition-all duration-300 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60 focus-visible:ring-offset-2 focus-visible:ring-offset-app-bg"
+                aria-pressed="false"
+              >
+                <span id="record-icon" aria-hidden="true"></span>
+                <span class="sr-only">開始或停止錄音</span>
+              </button>
+
+              <!-- 錄音中小指示 -->
+              <div
+                id="recording-indicator"
+                class="absolute -bottom-7 inset-x-0 flex items-center justify-center text-[11px] text-primary/80 opacity-0 transition-opacity duration-200"
+              >
+                <span class="inline-flex items-center gap-1 rounded-full bg-card px-2 py-0.5 shadow-sm">
+                  <span class="inline-flex h-2 w-2 rounded-full bg-primary animate-pulse"></span>
+                  <span>錄音中</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Visualizer 區塊（含計時器） -->
+          <div class="mt-8 bg-card rounded-3xl p-4 shadow-soft-card">
+            <div class="flex items-center justify-between mb-1">
+              <div class="text-[11px] uppercase tracking-[0.22em] text-text-main/60">
+                Input level
+              </div>
+              <div
+                id="mic-status"
+                class="text-[11px] text-red-500 hidden"
+              ></div>
+            </div>
+            <div class="flex items-center justify-between mb-2">
+              <div class="text-[11px] text-text-main/60">
+                錄音時長
+              </div>
+              <div
+                id="recording-timer"
+                class="text-xs tracking-[0.2em] text-text-main/80"
+              >
+                00:00
+              </div>
+            </div>
+            <div class="rounded-2xl overflow-hidden bg-app-bg border border-accent/70">
+              <canvas
+                id="visualizer"
+                class="w-full h-24 block"
+              ></canvas>
+            </div>
+            <p class="mt-2 text-[11px] text-text-main/70 leading-relaxed">
+              對著麥克風說話，如果看到長條圖跳動，就代表麥克風正常運作。
+            </p>
+          </div>
+        </section>
+
+        <!-- 視圖 2：檔案列表 -->
+        <section
+          data-view="list"
+          class="view-screen hidden opacity-0 transition-opacity duration-300"
+        >
+          <div class="mb-3">
+            <h2 class="font-display font-semibold text-xl text-text-main mb-1">
+              我的筆記
+            </h2>
+            <p class="text-xs text-text-main/70 leading-relaxed">
+              搜尋、整理與批次管理你的語音筆記。
+            </p>
+          </div>
+
+          <!-- 搜尋欄 -->
+          <div class="mb-3">
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-text-main/40">
+                <i data-lucide="search" class="w-4 h-4"></i>
+              </span>
+              <input
+                id="notes-search"
+                type="search"
+                placeholder="搜尋標題、內容或標籤"
+                class="w-full pl-9 pr-3 py-2 rounded-full bg-card border border-card-alt text-xs text-text-main placeholder:text-text-main/40 focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary"
+              />
+            </div>
+          </div>
+
+          <div id="notes-list" class="space-y-3">
+            <!-- JS 填入筆記卡片 -->
+          </div>
+        </section>
+
+        <!-- 視圖 3：筆記詳情 -->
+        <section
+          data-view="detail"
+          class="view-screen hidden opacity-0 transition-opacity duration-300"
+        >
+          <!-- 返回與日期 -->
+          <button
+            type="button"
+            id="detail-back"
+            class="inline-flex items-center text-sm text-text-main/80 mb-3 -ml-1"
+          >
+            <span class="mr-1 text-lg">&lt;</span>
+            <span>返回</span>
+          </button>
+
+          <div id="detail-datetime" class="text-[11px] text-text-main/60 mb-1">
+            <!-- JS 填入日期時間 -->
+          </div>
+          <input
+            id="detail-title-input"
+            type="text"
+            class="w-full bg-transparent border-b border-accent/60 focus:border-primary focus:outline-none text-lg font-display font-semibold text-text-main pb-1 mb-3"
+            placeholder="標題"
+          />
+
+          <!-- 資料夾與標籤 -->
+          <div class="mb-4 space-y-2">
+            <div class="flex items-center gap-2">
+              <span class="text-[11px] text-text-main/60">資料夾</span>
+              <select
+                id="detail-folder-select"
+                class="text-[11px] bg-card-alt text-text-main px-2 py-1 rounded-full border border-accent/70"
+              ></select>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[11px] text-text-main/60">標籤</span>
+                <button
+                  id="detail-add-tag-btn"
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-card-alt text-[11px] text-text-main active:scale-95 transition-transform"
+                >
+                  <i data-lucide="plus" class="w-3 h-3"></i>
+                  <span>新增標籤</span>
+                </button>
+              </div>
+              <div id="detail-tags" class="flex flex-wrap gap-1.5"></div>
+            </div>
+          </div>
+
+          <!-- 錄音片段列表 -->
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="text-[11px] tracking-[0.22em] uppercase text-text-main/60">
+                錄音片段
+              </h3>
+              <span
+                id="detail-summary"
+                class="text-[11px] text-text-main/60"
+              ></span>
+            </div>
+            <div id="segments-list" class="space-y-2">
+              <!-- JS 填入 segment 列表 -->
+            </div>
+            <div
+              id="segments-empty"
+              class="text-[12px] text-text-main/70 mt-1 hidden"
+            >
+              目前尚無錄音片段，可以從下方的「追加錄音」開始補充。
+            </div>
+          </div>
+
+          <!-- 文字編輯區 + Regenerate -->
+          <div class="mb-24">
+            <div class="flex items-center justify-between mb-2 gap-2">
+              <div class="flex flex-col">
+                <h3 class="text-[11px] tracking-[0.22em] uppercase text-text-main/60">
+                  文字筆記
+                </h3>
+                <span
+                  id="detail-mode"
+                  class="text-[11px] text-primary mt-0.5"
+                ></span>
+              </div>
+              <div class="flex items-center gap-2">
+                <select
+                  id="detail-regenerate-mode"
+                  class="text-[11px] bg-card-alt text-text-main px-2 py-1 rounded-full border border-accent/70"
+                >
+                  <option value="summary">精煉重點</option>
+                  <option value="verbose">詳盡逐字</option>
+                  <option value="fun">幽默風格</option>
+                  <option value="formal">嚴肅職場</option>
+                </select>
+                <button
+                  id="detail-regenerate-btn"
+                  type="button"
+                  class="text-[11px] px-3 py-1 rounded-full bg-primary text-white shadow-soft-card active:scale-95 transition-transform"
+                >
+                  重新生成
+                </button>
+              </div>
+            </div>
+            <textarea
+              id="detail-text"
+              class="w-full min-h-[190px] bg-card rounded-2xl px-4 py-3 text-sm leading-relaxed border border-accent/70 focus:border-primary focus:ring-1 focus:ring-primary/40 outline-none resize-vertical"
+              placeholder="AI 轉錄完成後的文字會顯示在這裡，也可以自行補充與編輯。"
+            ></textarea>
+
+            <!-- Action Bar：複製、分享、刪除 -->
+            <div class="mt-3 flex items-center justify-between text-[11px] text-text-main/70">
+              <div class="flex items-center gap-3">
+                <button
+                  id="detail-copy-btn"
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-card-alt hover:bg-accent/70 active:scale-95 transition-transform"
+                >
+                  <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                  <span>複製</span>
+                </button>
+                <button
+                  id="detail-share-btn"
+                  type="button"
+                  class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-card-alt hover:bg-accent/70 active:scale-95 transition-transform"
+                >
+                  <i data-lucide="share-2" class="w-3.5 h-3.5"></i>
+                  <span>分享</span>
+                </button>
+              </div>
+              <button
+                id="detail-delete-btn"
+                type="button"
+                class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-card-alt hover:bg-red-100 text-red-600 active:scale-95 transition-transform"
+              >
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                <span>刪除</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 視圖 4：日曆 -->
+        <section
+          data-view="calendar"
+          class="view-screen hidden opacity-0 transition-opacity duration-300"
+        >
+          <div class="mb-4">
+            <h2 class="font-display font-semibold text-xl text-text-main mb-1">
+              日曆總覽
+            </h2>
+            <p class="text-xs text-text-main/70 leading-relaxed">
+              有筆記的日期下方會出現一個小綠點，點擊日期可查看當天的筆記。
+            </p>
+          </div>
+
+          <div class="bg-card rounded-3xl p-4 shadow-soft-card">
+            <div class="flex items-center justify-between mb-2">
+              <button
+                id="cal-prev-month"
+                type="button"
+                class="h-7 w-7 rounded-full bg-card-alt text-text-main flex items-center justify-center text-sm"
+              >
+                ‹
+              </button>
+              <div
+                id="cal-month-label"
+                class="text-sm font-medium text-text-main"
+              ></div>
+              <button
+                id="cal-next-month"
+                type="button"
+                class="h-7 w-7 rounded-full bg-card-alt text-text-main flex items-center justify-center text-sm"
+              >
+                ›
+              </button>
+            </div>
+            <div class="grid grid-cols-7 gap-1 text-center text-[11px] text-text-main/60 mb-1">
+              <div>日</div>
+              <div>一</div>
+              <div>二</div>
+              <div>三</div>
+              <div>四</div>
+              <div>五</div>
+              <div>六</div>
+            </div>
+            <div
+              id="cal-grid"
+              class="grid grid-cols-7 gap-1 text-center text-xs"
+            ></div>
+          </div>
+
+          <div class="mt-4">
+            <div
+              id="cal-selected-label"
+              class="text-[11px] text-text-main/70 mb-1"
+            ></div>
+            <div id="cal-day-notes" class="space-y-2">
+              <!-- JS 填入當日筆記 -->
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Sticky Bottom：追加錄音按鈕（只在詳情頁顯示） -->
+      <div
+        id="append-bar"
+        class="fixed bottom-4 inset-x-0 flex justify-center pointer-events-none hidden"
+      >
+        <div class="w-full max-w-md px-4 pointer-events-auto">
+          <button
+            id="append-record-btn"
+            type="button"
+            class="w-full bg-secondary text-text-main rounded-full py-3.5 text-sm font-medium shadow-soft-card flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          >
+            <span>+ 追加錄音 Append</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- List View：懸浮 FAB -->
+      <div
+        id="list-fab-container"
+        class="fixed bottom-4 right-4 z-30 flex flex-col gap-3 hidden"
+      >
+        <button
+          id="fab-create-folder"
+          type="button"
+          class="h-11 w-11 rounded-full bg-primary text-white shadow-soft-card flex items-center justify-center active:scale-95 transition-transform"
+          title="建立資料夾"
+        >
+          <i data-lucide="folder-plus" class="w-4 h-4"></i>
+        </button>
+        <button
+          id="fab-create-tag"
+          type="button"
+          class="h-11 w-11 rounded-full bg-secondary text-text-main shadow-soft-card flex items-center justify-center active:scale-95 transition-transform"
+          title="建立標籤"
+        >
+          <i data-lucide="tag" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <!-- 批次操作列 -->
+      <div
+        id="batch-action-bar"
+        class="fixed bottom-0 inset-x-0 z-40 bg-card border-t border-card-alt py-2 px-4 flex items-center justify-between text-xs text-text-main/80 hidden"
+      >
+        <div id="batch-count"></div>
+        <div class="flex items-center gap-2">
+          <button
+            id="batch-move-folder-btn"
+            type="button"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-card-alt hover:bg-accent/70 active:scale-95 transition-transform"
+          >
+            <i data-lucide="folder" class="w-3.5 h-3.5"></i>
+            <span>移動資料夾</span>
+          </button>
+          <button
+            id="batch-delete-btn"
+            type="button"
+            class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-card-alt hover:bg-red-100 text-red-600 active:scale-95 transition-transform"
+          >
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            <span>刪除</span>
+          </button>
+          <button
+            id="batch-cancel-btn"
+            type="button"
+            class="inline-flex items-center px-2 py-1 rounded-full text-text-main/70 hover:bg-card-alt active:scale-95 transition-transform"
+          >
+            取消
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OpenAI API 設定 Modal -->
+  <div
+    id="settings-modal"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity"
+    aria-hidden="true"
+  >
+    <div class="bg-card rounded-3xl shadow-soft-card max-w-sm w-[90%] p-5 relative">
+      <button
+        id="settings-close"
+        type="button"
+        class="absolute top-3 right-3 text-text-main/40 hover:text-text-main transition-colors"
+        aria-label="關閉設定視窗"
+      >
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+      <h2 class="font-display font-semibold text-lg text-text-main mb-2">
+        OpenAI API 設定
+      </h2>
+      <p class="text-xs text-text-main/70 leading-relaxed mb-3">
+        在此貼上你的 <span class="font-medium">OpenAI API Key</span>（例如 <code>sk-...</code>）。<br>
+        金鑰會儲存在此瀏覽器的 localStorage 中。
+      </p>
+
+      <label for="settings-api-key" class="block text-xs text-text-main/80 mb-1">
+        API Key
+      </label>
+      <input
+        id="settings-api-key"
+        type="text"
+        inputmode="text"
+        autocomplete="off"
+        placeholder="sk-..."
+        class="w-full rounded-xl border border-accent/80 bg-app-bg px-3 py-2 text-sm text-text-main focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/40 mb-3"
+      />
+
+      <button
+        id="settings-save"
+        type="button"
+        class="w-full rounded-full bg-primary text-white py-2.5 text-sm font-medium shadow-soft-card active:scale-[0.98] transition-transform"
+      >
+        儲存
+      </button>
+      <div
+        id="settings-saved"
+        class="mt-2 text-[11px] text-primary hidden"
+      >
+        已儲存 API Key。
+      </div>
+
+      <div class="mt-4 border-t border-card-alt pt-3">
+        <label class="flex items-center justify-between text-xs text-text-main/80">
+          <span>AI 自動分類與標籤</span>
+          <span class="inline-flex items-center gap-2">
+            <span id="settings-auto-categorize-label" class="text-[11px] text-text-main/60"></span>
+            <input
+              id="settings-auto-categorize"
+              type="checkbox"
+              class="h-4 w-7 rounded border-accent text-primary"
+            />
+          </span>
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主邏輯腳本 -->
+  <script>
+    (function () {
+      'use strict';
+
+      function refreshIcons() {
+        if (window.lucide && window.lucide.createIcons) {
+          window.lucide.createIcons();
+        }
+      }
+
+      // ====== 常數與狀態 ======
+      const MODE_DEFS = {
+        summary: { id: 'summary', label: '精煉重點' },
+        verbose: { id: 'verbose', label: '詳盡逐字' },
+        fun: { id: 'fun', label: '幽默風格' },
+        formal: { id: 'formal', label: '嚴肅職場' }
+      };
+
+      const STORAGE_KEY_NOTES = 'tj_notes_v1';
+      const STORAGE_KEY_MODE = 'tj_last_mode';
+      const STORAGE_KEY_OPENAI = 'tj_openai_api_key';
+      const STORAGE_KEY_FOLDERS = 'tj_folders_v1';
+      const STORAGE_KEY_TAGS = 'tj_tags_v1';
+      const STORAGE_KEY_AUTO_CATEGORIZE = 'tj_auto_categorize_v1';
+
+      const MIC_ICON = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z" />
+          <path d="M7 11a1 1 0 1 0-2 0 7 7 0 0 0 6 6.92V20H8a1 1 0 1 0 0 2h8a1 1 0 1 0 0-2h-3v-2.08A7 7 0 0 0 19 11a1 1 0 1 0-2 0 5 5 0 0 1-10 0z" />
+        </svg>
+      `;
+      const STOP_ICON = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="7" y="7" width="10" height="10" rx="2" />
+        </svg>
+      `;
+      const PLAY_ICON = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 5v14l11-7z" />
+        </svg>
+      `;
+
+      const appState = {
+        currentView: 'home',
+        notes: [],
+        folders: [],
+        tags: [],
+        currentMode: 'summary',
+        activeNoteId: null,
+        appendTargetNoteId: null,
+        isRecording: false,
+        isSettingsOpen: false,
+        autoCategorize: true,
+        calendarYear: new Date().getFullYear(),
+        calendarMonth: new Date().getMonth(), // 0-11
+        calendarSelectedDateStr: null,
+        searchQuery: '',
+        selectionMode: false,
+        selectedNoteIds: new Set()
+      };
+
+      const DOM = {};
+
+      // 錄音相關
+      let mediaRecorder = null;
+      let audioChunks = [];
+      let recordingStartTime = null;
+      let timerInterval = null;
+
+      // Web Audio + Visualizer
+      let audioContext = null;
+      let analyser = null;
+      let dataArray = null;
+      let visualizerAnimationId = null;
+
+      // IndexedDB
+      const dbPromise = 'indexedDB' in window ? openDatabase() : Promise.resolve(null);
+
+      document.addEventListener('DOMContentLoaded', initApp);
+
+      // ====== 初始化 ======
+      function initApp() {
+        // 綁定 DOM 元素
+        DOM.homeDateEl = document.getElementById('home-date');
+        DOM.recordBtn = document.getElementById('record-btn');
+        DOM.recordIcon = document.getElementById('record-icon');
+        DOM.recordingIndicator = document.getElementById('recording-indicator');
+        DOM.recordingTimer = document.getElementById('recording-timer');
+        DOM.micStatus = document.getElementById('mic-status');
+        DOM.modePills = document.querySelectorAll('.mode-pill');
+        DOM.views = document.querySelectorAll('[data-view]');
+        DOM.notesList = document.getElementById('notes-list');
+        DOM.notesSearchInput = document.getElementById('notes-search');
+
+        DOM.detailBack = document.getElementById('detail-back');
+        DOM.detailTitleInput = document.getElementById('detail-title-input');
+        DOM.detailDatetime = document.getElementById('detail-datetime');
+        DOM.detailText = document.getElementById('detail-text');
+        DOM.detailSummary = document.getElementById('detail-summary');
+        DOM.detailMode = document.getElementById('detail-mode');
+        DOM.detailRegenMode = document.getElementById('detail-regenerate-mode');
+        DOM.detailRegenBtn = document.getElementById('detail-regenerate-btn');
+        DOM.detailCopyBtn = document.getElementById('detail-copy-btn');
+        DOM.detailShareBtn = document.getElementById('detail-share-btn');
+        DOM.detailDeleteBtn = document.getElementById('detail-delete-btn');
+        DOM.segmentsList = document.getElementById('segments-list');
+        DOM.segmentsEmpty = document.getElementById('segments-empty');
+        DOM.detailFolderSelect = document.getElementById('detail-folder-select');
+        DOM.detailAddTagBtn = document.getElementById('detail-add-tag-btn');
+        DOM.detailTags = document.getElementById('detail-tags');
+
+        DOM.appendBar = document.getElementById('append-bar');
+        DOM.appendBtn = document.getElementById('append-record-btn');
+
+        DOM.visualizerCanvas = document.getElementById('visualizer');
+        DOM.visualizerCtx = DOM.visualizerCanvas.getContext('2d');
+
+        // Header & 設定相關 DOM
+        DOM.headerHome = document.getElementById('header-home');
+        DOM.headerNotesBtn = document.getElementById('header-notes-btn');
+        DOM.headerCalendarBtn = document.getElementById('header-calendar-btn');
+        DOM.settingsBtn = document.getElementById('settings-btn');
+        DOM.settingsModal = document.getElementById('settings-modal');
+        DOM.settingsClose = document.getElementById('settings-close');
+        DOM.settingsInput = document.getElementById('settings-api-key');
+        DOM.settingsSave = document.getElementById('settings-save');
+        DOM.settingsSaved = document.getElementById('settings-saved');
+        DOM.settingsAutoCategorize = document.getElementById('settings-auto-categorize');
+        DOM.settingsAutoCategorizeLabel = document.getElementById('settings-auto-categorize-label');
+
+        // 日曆
+        DOM.calGrid = document.getElementById('cal-grid');
+        DOM.calMonthLabel = document.getElementById('cal-month-label');
+        DOM.calPrevBtn = document.getElementById('cal-prev-month');
+        DOM.calNextBtn = document.getElementById('cal-next-month');
+        DOM.calSelectedLabel = document.getElementById('cal-selected-label');
+        DOM.calDayNotes = document.getElementById('cal-day-notes');
+
+        // FAB + 批次列
+        DOM.listFabContainer = document.getElementById('list-fab-container');
+        DOM.fabCreateFolder = document.getElementById('fab-create-folder');
+        DOM.fabCreateTag = document.getElementById('fab-create-tag');
+        DOM.batchActionBar = document.getElementById('batch-action-bar');
+        DOM.batchCount = document.getElementById('batch-count');
+        DOM.batchMoveFolderBtn = document.getElementById('batch-move-folder-btn');
+        DOM.batchDeleteBtn = document.getElementById('batch-delete-btn');
+        DOM.batchCancelBtn = document.getElementById('batch-cancel-btn');
+
+        DOM.recordIcon.innerHTML = MIC_ICON;
+
+        const today = new Date();
+        appState.calendarYear = today.getFullYear();
+        appState.calendarMonth = today.getMonth();
+        appState.calendarSelectedDateStr = formatDateKey(today);
+
+        setHomeDate();
+        initVisualizer();
+
+        loadFolders();
+        loadTags();
+        loadAutoCategorizeSetting();
+
+        // 載入模式與筆記
+        loadInitialMode();
+        appState.notes = loadNotesFromStorage();
+        ensureNoteSchema();
+        renderNotesList();
+
+        // 綁定事件
+        bindModeSelector();
+        bindNav();
+        bindRecordingControls();
+        bindDetailEvents();
+        bindNotesListSearch();
+        bindListFabsAndBatch();
+        initSettingsModal();
+        bindCalendarEvents();
+
+        // 初始視圖
+        showView('home');
+
+        refreshIcons();
+      }
+
+      // ====== IndexedDB：音訊儲存 ======
+      function openDatabase() {
+        return new Promise(function (resolve, reject) {
+          const request = indexedDB.open('talking-journal-db', 1);
+
+          request.onupgradeneeded = function () {
+            const db = request.result;
+            if (!db.objectStoreNames.contains('segments')) {
+              const store = db.createObjectStore('segments', {
+                keyPath: 'id',
+                autoIncrement: true
+              });
+              store.createIndex('by_noteId', 'noteId', { unique: false });
+            }
+          };
+
+          request.onsuccess = function () {
+            resolve(request.result);
+          };
+
+          request.onerror = function () {
+            console.error('IndexedDB 開啟失敗：', request.error);
+            reject(request.error);
+          };
+        });
+      }
+
+      async function saveSegment(noteId, blob, durationSec) {
+        const db = await dbPromise;
+        if (!db) {
+          console.warn('瀏覽器不支援 IndexedDB，音訊將無法持久儲存。');
+          return null;
+        }
+        return new Promise(function (resolve, reject) {
+          const tx = db.transaction('segments', 'readwrite');
+          const store = tx.objectStore('segments');
+          const record = {
+            noteId: noteId,
+            createdAt: new Date().toISOString(),
+            duration: durationSec,
+            blob: blob
+          };
+          const req = store.add(record);
+          req.onsuccess = function () {
+            resolve(req.result);
+          };
+          req.onerror = function () {
+            console.error('儲存音訊失敗：', req.error);
+            reject(req.error);
+          };
+        });
+      }
+
+      async function getSegmentsByNote(noteId) {
+        const db = await dbPromise;
+        if (!db) return [];
+        return new Promise(function (resolve, reject) {
+          const tx = db.transaction('segments', 'readonly');
+          const store = tx.objectStore('segments');
+          const index = store.index('by_noteId');
+          const req = index.getAll(noteId);
+          req.onsuccess = function () {
+            resolve(req.result || []);
+          };
+          req.onerror = function () {
+            reject(req.error);
+          };
+        });
+      }
+
+      async function getSegmentById(id) {
+        const db = await dbPromise;
+        if (!db) return null;
+        return new Promise(function (resolve, reject) {
+          const tx = db.transaction('segments', 'readonly');
+          const store = tx.objectStore('segments');
+          const req = store.get(id);
+          req.onsuccess = function () {
+            resolve(req.result || null);
+          };
+          req.onerror = function () {
+            reject(req.error);
+          };
+        });
+      }
+
+      async function deleteSegmentsByNote(noteId) {
+        const db = await dbPromise;
+        if (!db) return;
+        return new Promise(function (resolve, reject) {
+          const tx = db.transaction('segments', 'readwrite');
+          const store = tx.objectStore('segments');
+          const index = store.index('by_noteId');
+          const range = IDBKeyRange.only(noteId);
+          const req = index.openCursor(range);
+          req.onsuccess = function (event) {
+            const cursor = event.target.result;
+            if (cursor) {
+              cursor.delete();
+              cursor.continue();
+            }
+          };
+          tx.oncomplete = function () {
+            resolve();
+          };
+          tx.onerror = function () {
+            console.error('刪除音訊片段失敗：', tx.error);
+            reject(tx.error);
+          };
+        });
+      }
+
+      // ====== localStorage：筆記、資料夾、標籤、模式 ======
+      function loadNotesFromStorage() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_NOTES);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          console.warn('讀取筆記失敗，將忽略舊資料：', e);
+          return [];
+        }
+      }
+
+      function saveNotesToStorage() {
+        try {
+          localStorage.setItem(STORAGE_KEY_NOTES, JSON.stringify(appState.notes));
+        } catch (e) {
+          console.error('寫入筆記失敗：', e);
+        }
+      }
+
+      function loadFolders() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_FOLDERS);
+          let arr = [];
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) arr = parsed;
+          }
+          if (!arr.length) {
+            arr = [
+              { id: 'default', name: '未分類', createdAt: new Date().toISOString() }
+            ];
+          }
+          appState.folders = arr;
+        } catch (e) {
+          console.warn('讀取資料夾失敗：', e);
+          appState.folders = [
+            { id: 'default', name: '未分類', createdAt: new Date().toISOString() }
+          ];
+        }
+      }
+
+      function saveFolders() {
+        try {
+          localStorage.setItem(STORAGE_KEY_FOLDERS, JSON.stringify(appState.folders));
+        } catch (e) {
+          console.error('寫入資料夾失敗：', e);
+        }
+      }
+
+      function loadTags() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_TAGS);
+          if (!raw) {
+            appState.tags = [];
+            return;
+          }
+          const parsed = JSON.parse(raw);
+          appState.tags = Array.isArray(parsed)
+            ? parsed.map(function (t) { return String(t); })
+            : [];
+        } catch (e) {
+          console.warn('讀取標籤失敗：', e);
+          appState.tags = [];
+        }
+      }
+
+      function saveTags() {
+        try {
+          localStorage.setItem(STORAGE_KEY_TAGS, JSON.stringify(appState.tags));
+        } catch (e) {
+          console.error('寫入標籤失敗：', e);
+        }
+      }
+
+      function ensureNoteSchema() {
+        const defaultFolder = getDefaultFolder();
+        const defaultFolderId = defaultFolder ? defaultFolder.id : 'default';
+        let changed = false;
+        appState.notes.forEach(function (note) {
+          if (!note.folderId) {
+            note.folderId = defaultFolderId;
+            changed = true;
+          }
+          if (!Array.isArray(note.tags)) {
+            note.tags = [];
+            changed = true;
+          }
+          if (typeof note.transcript !== 'string') {
+            note.transcript = '';
+            changed = true;
+          }
+          if (!note.mode || !MODE_DEFS[note.mode]) {
+            note.mode = 'summary';
+            changed = true;
+          }
+        });
+        if (changed) {
+          saveNotesToStorage();
+        }
+      }
+
+      function loadInitialMode() {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY_MODE);
+          if (saved && MODE_DEFS[saved]) {
+            appState.currentMode = saved;
+          }
+        } catch (e) {
+          console.warn('讀取模式失敗：', e);
+        }
+        // 同步 UI
+        DOM.modePills.forEach(function (pill) {
+          const mode = pill.getAttribute('data-mode');
+          if (mode === appState.currentMode) {
+            pill.classList.add('bg-primary', 'text-white', 'shadow-sm');
+            pill.classList.remove('bg-card-alt', 'text-text-main');
+          } else {
+            pill.classList.remove('bg-primary', 'text-white', 'shadow-sm');
+            pill.classList.add('bg-card-alt', 'text-text-main');
+          }
+        });
+      }
+
+      function persistMode() {
+        try {
+          localStorage.setItem(STORAGE_KEY_MODE, appState.currentMode);
+        } catch (e) {
+          console.warn('儲存模式失敗：', e);
+        }
+      }
+
+      function getOpenAIApiKey() {
+        try {
+          return localStorage.getItem(STORAGE_KEY_OPENAI) || '';
+        } catch (e) {
+          console.warn('讀取 OpenAI API Key 失敗：', e);
+          return '';
+        }
+      }
+
+      function loadAutoCategorizeSetting() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY_AUTO_CATEGORIZE);
+          if (raw === null) {
+            appState.autoCategorize = true;
+          } else {
+            appState.autoCategorize = raw === 'true';
+          }
+        } catch (e) {
+          appState.autoCategorize = true;
+        }
+      }
+
+      function saveAutoCategorizeSetting() {
+        try {
+          localStorage.setItem(
+            STORAGE_KEY_AUTO_CATEGORIZE,
+            appState.autoCategorize ? 'true' : 'false'
+          );
+        } catch (e) {
+          console.error('儲存自動分類設定失敗：', e);
+        }
+      }
+
+      // ====== 日期 / 格式化 ======
+      function setHomeDate() {
+        const now = new Date();
+        const monthDay = new Intl.DateTimeFormat('zh-TW', {
+          month: 'short',
+          day: '2-digit'
+        }).format(now);
+        const weekday = new Intl.DateTimeFormat('zh-TW', {
+          weekday: 'long'
+        }).format(now);
+        if (DOM.homeDateEl) {
+          DOM.homeDateEl.textContent = monthDay + '，' + weekday;
+        }
+      }
+
+      function formatDateTime(isoString) {
+        if (!isoString) return '';
+        const d = new Date(isoString);
+        return new Intl.DateTimeFormat('zh-TW', {
+          month: 'short',
+          day: '2-digit',
+          weekday: 'short',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).format(d);
+      }
+
+      function formatDuration(seconds) {
+        const s = Math.max(0, Math.floor(seconds || 0));
+        const m = Math.floor(s / 60);
+        const r = s % 60;
+        return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+      }
+
+      function formatDateKey(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + d;
+      }
+
+      function getDefaultFolder() {
+        let f = appState.folders.find(function (f) { return f.name === '未分類'; });
+        if (!f) f = appState.folders[0];
+        return f;
+      }
+
+      function getFolderById(id) {
+        return appState.folders.find(function (f) { return f.id === id; }) || null;
+      }
+
+      function getFolderByName(name) {
+        const target = (name || '').trim();
+        if (!target) return null;
+        return appState.folders.find(function (f) {
+          return f.name.trim() === target;
+        }) || null;
+      }
+
+      function ensureGlobalTagExists(tagName) {
+        const name = (tagName || '').trim();
+        if (!name) return;
+        if (!appState.tags.includes(name)) {
+          appState.tags.push(name);
+          saveTags();
+        }
+      }
+
+      // ====== 視圖切換 ======
+      function showView(viewName) {
+        if (appState.currentView === viewName) return;
+
+        DOM.views.forEach(function (el) {
+          const name = el.getAttribute('data-view');
+          if (name === viewName) {
+            el.classList.remove('hidden');
+            void el.offsetWidth; // reflow
+            el.classList.remove('opacity-0');
+            el.classList.add('opacity-100');
+          } else {
+            el.classList.add('opacity-0');
+            setTimeout(function () {
+              if (el.getAttribute('data-view') !== viewName) {
+                el.classList.add('hidden');
+              }
+            }, 200);
+          }
+        });
+
+        appState.currentView = viewName;
+
+        // Header 高亮
+        if (DOM.headerNotesBtn) {
+          if (viewName === 'list' || viewName === 'detail') {
+            DOM.headerNotesBtn.classList.add('bg-primary', 'text-white');
+          } else {
+            DOM.headerNotesBtn.classList.remove('bg-primary', 'text-white');
+          }
+        }
+        if (DOM.headerCalendarBtn) {
+          if (viewName === 'calendar') {
+            DOM.headerCalendarBtn.classList.add('bg-primary', 'text-white');
+          } else {
+            DOM.headerCalendarBtn.classList.remove('bg-primary', 'text-white');
+          }
+        }
+
+        // 詳情頁才顯示追加錄音 bar
+        if (appState.currentView === 'detail') {
+          DOM.appendBar.classList.remove('hidden');
+        } else {
+          DOM.appendBar.classList.add('hidden');
+        }
+
+        // List FAB 顯示
+        if (DOM.listFabContainer) {
+          if (viewName === 'list' && !appState.selectionMode) {
+            DOM.listFabContainer.classList.remove('hidden');
+          } else {
+            DOM.listFabContainer.classList.add('hidden');
+          }
+        }
+
+        if (viewName === 'calendar') {
+          renderCalendar();
+        }
+
+        refreshIcons();
+      }
+
+      function bindNav() {
+        if (DOM.headerHome) {
+          DOM.headerHome.addEventListener('click', function () {
+            appState.activeNoteId = null;
+            appState.appendTargetNoteId = null;
+            exitSelectionMode();
+            showView('home');
+          });
+        }
+        if (DOM.headerNotesBtn) {
+          DOM.headerNotesBtn.addEventListener('click', function () {
+            appState.activeNoteId = null;
+            appState.appendTargetNoteId = null;
+            showView('list');
+          });
+        }
+        if (DOM.headerCalendarBtn) {
+          DOM.headerCalendarBtn.addEventListener('click', function () {
+            appState.activeNoteId = null;
+            appState.appendTargetNoteId = null;
+            exitSelectionMode();
+            showView('calendar');
+          });
+        }
+      }
+
+      // ====== 模式選擇器 ======
+      function bindModeSelector() {
+        DOM.modePills.forEach(function (pill) {
+          pill.addEventListener('click', function () {
+            const mode = pill.getAttribute('data-mode');
+            if (!MODE_DEFS[mode]) return;
+            appState.currentMode = mode;
+            persistMode();
+
+            DOM.modePills.forEach(function (p) {
+              const m = p.getAttribute('data-mode');
+              if (m === mode) {
+                p.classList.add('bg-primary', 'text-white', 'shadow-sm');
+                p.classList.remove('bg-card-alt', 'text-text-main');
+              } else {
+                p.classList.remove('bg-primary', 'text-white', 'shadow-sm');
+                p.classList.add('bg-card-alt', 'text-text-main');
+              }
+            });
+          });
+        });
+      }
+
+      // ====== 錄音控制 ======
+      function bindRecordingControls() {
+        DOM.recordBtn.addEventListener('click', function () {
+          if (!appState.isRecording) {
+            startRecording();
+          } else {
+            stopRecording();
+          }
+        });
+      }
+
+      async function startRecording() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          DOM.micStatus.textContent = '此瀏覽器不支援錄音功能。';
+          DOM.micStatus.classList.remove('hidden');
+          return;
+        }
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          DOM.micStatus.classList.add('hidden');
+
+          setupAnalyser(stream);
+
+          audioChunks = [];
+          mediaRecorder = new MediaRecorder(stream);
+
+          recordingStartTime = Date.now();
+          appState.isRecording = true;
+          updateRecordButtonUI(true);
+          startTimer();
+
+          mediaRecorder.ondataavailable = function (event) {
+            if (event.data && event.data.size > 0) {
+              audioChunks.push(event.data);
+            }
+          };
+
+          mediaRecorder.onstop = function () {
+            const blob = new Blob(audioChunks, { type: 'audio/webm' });
+            const durationSec = (Date.now() - recordingStartTime) / 1000;
+
+            stream.getTracks().forEach(function (t) {
+              t.stop();
+            });
+
+            if (analyser) {
+              try {
+                analyser.disconnect();
+              } catch (e) {}
+            }
+            analyser = null;
+
+            handleRecordingComplete(blob, durationSec);
+          };
+
+          mediaRecorder.start();
+        } catch (err) {
+          console.error('無法啟用麥克風：', err);
+          DOM.micStatus.textContent = '無法啟用麥克風，請檢查瀏覽器權限設定。';
+          DOM.micStatus.classList.remove('hidden');
+          appState.isRecording = false;
+          updateRecordButtonUI(false);
+          stopTimer();
+        }
+      }
+
+      function stopRecording() {
+        if (!mediaRecorder || !appState.isRecording) return;
+        appState.isRecording = false;
+        updateRecordButtonUI(false);
+        stopTimer();
+        try {
+          mediaRecorder.stop();
+        } catch (e) {
+          console.warn('停止錄音失敗：', e);
+        }
+      }
+
+      function updateRecordButtonUI(isRecording) {
+        DOM.recordBtn.setAttribute('aria-pressed', isRecording ? 'true' : 'false');
+        if (isRecording) {
+          DOM.recordIcon.innerHTML = STOP_ICON;
+          DOM.recordBtn.classList.remove('rounded-full');
+          DOM.recordBtn.classList.add('rounded-3xl', 'scale-95');
+          DOM.recordingIndicator.classList.remove('opacity-0');
+          DOM.recordingIndicator.classList.add('opacity-100');
+        } else {
+          DOM.recordIcon.innerHTML = MIC_ICON;
+          DOM.recordBtn.classList.add('rounded-full');
+          DOM.recordBtn.classList.remove('rounded-3xl', 'scale-95');
+          DOM.recordingIndicator.classList.add('opacity-0');
+          DOM.recordingIndicator.classList.remove('opacity-100');
+          DOM.recordingTimer.textContent = '00:00';
+        }
+      }
+
+      function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(function () {
+          if (!recordingStartTime) return;
+          const sec = (Date.now() - recordingStartTime) / 1000;
+          DOM.recordingTimer.textContent = formatDuration(sec);
+        }, 300);
+      }
+
+      function stopTimer() {
+        if (timerInterval) {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }
+
+      async function handleRecordingComplete(blob, durationSec) {
+        if (durationSec < 0.8) {
+          return;
+        }
+
+        const apiKey = getOpenAIApiKey();
+        if (!apiKey) {
+          alert('請先在右上角「設定」中輸入 OpenAI API Key，才能進行轉譯。');
+          return;
+        }
+
+        const mode = appState.currentMode;
+
+        if (appState.appendTargetNoteId) {
+          const noteId = appState.appendTargetNoteId;
+          const note = appState.notes.find(function (n) { return n.id === noteId; });
+          if (!note) {
+            console.warn('找不到要追加的筆記，將改為建立新筆記。');
+            appState.appendTargetNoteId = null;
+            await handleRecordingCompleteAsNew(blob, durationSec, mode, apiKey);
+          } else {
+            await handleRecordingAppend(note, blob, durationSec, mode, apiKey);
+          }
+        } else {
+          await handleRecordingCompleteAsNew(blob, durationSec, mode, apiKey);
+        }
+      }
+
+      async function handleRecordingCompleteAsNew(blob, durationSec, mode, apiKey) {
+        const noteId = 'note_' + Date.now();
+        const nowIso = new Date().toISOString();
+        const defaultFolder = getDefaultFolder();
+
+        const newNote = {
+          id: noteId,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          mode: mode,
+          text: '',
+          title: '轉譯中',
+          totalDurationSec: durationSec,
+          transcript: '',
+          folderId: defaultFolder ? defaultFolder.id : 'default',
+          tags: []
+        };
+
+        appState.notes.unshift(newNote);
+        saveNotesToStorage();
+        renderNotesList();
+        renderCalendar();
+
+        await saveSegment(noteId, blob, durationSec);
+
+        try {
+          const result = await transcribeAndRewriteNewSegment(blob, mode, apiKey);
+          const transcript = result.transcript || '';
+          const content = result.content || transcript;
+          const folderName = result.folderName || '';
+          const tags = Array.isArray(result.tags) ? result.tags : [];
+
+          newNote.transcript = transcript;
+          newNote.text = content || '';
+          newNote.title = enforceTitleLength(
+            result.title || deriveTitleFromText(newNote.text)
+          );
+
+          if (appState.autoCategorize) {
+            applyFolderAndTagsFromAI(newNote, folderName, tags);
+          }
+
+          newNote.updatedAt = new Date().toISOString();
+        } catch (err) {
+          alert('OpenAI 轉譯失敗：' + (err.message || err));
+          newNote.text = '';
+          newNote.title = '轉譯失敗';
+          newNote.updatedAt = new Date().toISOString();
+        }
+
+        saveNotesToStorage();
+        renderNotesList();
+        renderCalendar();
+      }
+
+      async function handleRecordingAppend(note, blob, durationSec, mode, apiKey) {
+        await saveSegment(note.id, blob, durationSec);
+
+        note.totalDurationSec = (note.totalDurationSec || 0) + durationSec;
+        note.updatedAt = new Date().toISOString();
+        saveNotesToStorage();
+        renderNotesList();
+        renderCalendar();
+
+        const baseText = note.text || '';
+
+        try {
+          const result = await transcribeAndRewriteNewSegment(blob, mode, apiKey);
+          const transcript = result.transcript || '';
+          const content = result.content || transcript;
+          const folderName = result.folderName || '';
+          const tags = Array.isArray(result.tags) ? result.tags : [];
+
+          if (transcript) {
+            note.transcript = note.transcript
+              ? note.transcript + '\n\n' + transcript
+              : transcript;
+          }
+
+          const newContent = content || transcript;
+          note.text = baseText
+            ? baseText.trim() + '\n\n' + (newContent || '')
+            : (newContent || '');
+
+          if (appState.autoCategorize) {
+            applyFolderAndTagsFromAI(note, folderName, tags);
+          }
+
+          note.updatedAt = new Date().toISOString();
+        } catch (err) {
+          alert('OpenAI 轉譯失敗：' + (err.message || err));
+        }
+
+        saveNotesToStorage();
+        renderNotesList();
+        renderCalendar();
+
+        if (appState.activeNoteId === note.id && appState.currentView === 'detail') {
+          fillDetailView(note.id);
+        }
+
+        appState.appendTargetNoteId = null;
+      }
+
+      function applyFolderAndTagsFromAI(note, folderName, tags) {
+        if (!note) return;
+
+        const aiFolderName = (folderName || '').trim();
+        let folder = null;
+        if (aiFolderName) {
+          folder = getFolderByName(aiFolderName);
+        }
+        if (!folder) {
+          folder = getDefaultFolder();
+        }
+        if (folder) {
+          note.folderId = folder.id;
+        }
+
+        if (Array.isArray(tags)) {
+          const normalized = tags
+            .map(function (t) { return String(t).trim(); })
+            .filter(function (t) { return t.length > 0; });
+
+          if (normalized.length) {
+            normalized.forEach(function (t) {
+              ensureGlobalTagExists(t);
+              if (!note.tags.includes(t)) {
+                note.tags.push(t);
+              }
+            });
+          }
+        }
+      }
+
+      function enforceTitleLength(rawTitle) {
+        const clean = (rawTitle || '').trim();
+        const limited = clean.slice(0, 7);
+        return limited || '未命名筆記';
+      }
+
+      function deriveTitleFromText(text) {
+        if (!text) return '未命名筆記';
+        const clean = text.replace(/\s+/g, ' ').trim();
+        return enforceTitleLength(clean);
+      }
+
+      // ====== Web Audio Visualizer ======
+      function initVisualizer() {
+        if (!DOM.visualizerCanvas || !DOM.visualizerCtx) return;
+
+        function resizeCanvas() {
+          const rect = DOM.visualizerCanvas.getBoundingClientRect();
+          const dpr = window.devicePixelRatio || 1;
+          DOM.visualizerCanvas.width = rect.width * dpr;
+          DOM.visualizerCanvas.height = rect.height * dpr;
+          DOM.visualizerCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        }
+
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        function draw() {
+          visualizerAnimationId = requestAnimationFrame(draw);
+          const rect = DOM.visualizerCanvas.getBoundingClientRect();
+          const width = rect.width;
+          const height = rect.height;
+          const ctx = DOM.visualizerCtx;
+
+          ctx.clearRect(0, 0, width, height);
+
+          const barCount = 28;
+          const barWidth = width / barCount;
+          const baseColor1 = '#8fc1a3';
+          const baseColor2 = '#c8d6af';
+
+          if (analyser && dataArray) {
+            analyser.getByteFrequencyData(dataArray);
+            const step = Math.max(1, Math.floor(dataArray.length / barCount));
+
+            for (let i = 0; i < barCount; i++) {
+              const v = dataArray[i * step] / 255;
+              const barHeight = Math.max(4, v * height);
+              const x = i * barWidth;
+              const y = height - barHeight;
+              const color = i % 2 === 0 ? baseColor1 : baseColor2;
+              ctx.fillStyle = color;
+
+              if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(x + 1, y, barWidth - 3, barHeight, 4);
+                ctx.fill();
+              } else {
+                ctx.fillRect(x + 1, y, barWidth - 3, barHeight);
+              }
+            }
+          } else {
+            const flatHeight = height * 0.14;
+            const y = (height - flatHeight) / 2;
+            for (let i = 0; i < barCount; i++) {
+              const x = i * barWidth;
+              ctx.fillStyle = i % 2 === 0 ? baseColor1 : baseColor2;
+              if (ctx.roundRect) {
+                ctx.beginPath();
+                ctx.roundRect(x + 1, y, barWidth - 3, flatHeight, 4);
+                ctx.fill();
+              } else {
+                ctx.fillRect(x + 1, y, barWidth - 3, flatHeight);
+              }
+            }
+          }
+        }
+
+        draw();
+      }
+
+      function setupAnalyser(stream) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+
+        if (!audioContext) {
+          audioContext = new AudioContextClass();
+        }
+
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+      }
+
+      // ====== 筆記列表 & 搜尋 & 長按選取 ======
+      function bindNotesListSearch() {
+        if (!DOM.notesSearchInput) return;
+        DOM.notesSearchInput.addEventListener('input', function () {
+          appState.searchQuery = (DOM.notesSearchInput.value || '').toLowerCase();
+          renderNotesList();
+        });
+      }
+
+      function renderNotesList() {
+        if (!DOM.notesList) return;
+
+        DOM.notesList.innerHTML = '';
+
+        let notes = appState.notes.slice().sort(function (a, b) {
+          return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+        });
+
+        if (appState.searchQuery) {
+          const q = appState.searchQuery;
+          notes = notes.filter(function (note) {
+            const title = (note.title || '').toLowerCase();
+            const text = (note.text || '').toLowerCase();
+            const tagsStr = (Array.isArray(note.tags) ? note.tags.join(' ') : '').toLowerCase();
+            return (
+              title.includes(q) ||
+              text.includes(q) ||
+              tagsStr.includes(q)
+            );
+          });
+        }
+
+        if (!notes.length) {
+          const empty = document.createElement('div');
+          empty.className = 'text-sm text-text-main/70 leading-relaxed';
+          empty.textContent = appState.searchQuery
+            ? '沒有符合搜尋條件的筆記。'
+            : '目前還沒有任何筆記，先到上方錄音區試著說幾句話吧。';
+          DOM.notesList.appendChild(empty);
+          refreshIcons();
+          return;
+        }
+
+        notes.forEach(function (note) {
+          const card = document.createElement('div');
+          card.className =
+            'w-full bg-card rounded-2xl px-4 py-3 shadow-soft-card hover:-translate-y-0.5 transition-transform cursor-pointer';
+          card.setAttribute('data-note-id', note.id);
+
+          const title = document.createElement('div');
+          title.className = 'font-display font-semibold text-[15px] text-text-main truncate mb-1';
+          title.textContent = note.title || '未命名筆記';
+
+          const metaRow = document.createElement('div');
+          metaRow.className = 'flex items-center justify-between text-[11px] text-text-main/60';
+
+          const leftMeta = document.createElement('div');
+          leftMeta.className = 'flex items-center gap-1';
+          const dateEl = document.createElement('span');
+          dateEl.textContent = formatDateTime(note.createdAt);
+          const folder = getFolderById(note.folderId) || getDefaultFolder();
+          const folderEl = document.createElement('span');
+          folderEl.textContent = '· ' + (folder ? folder.name : '未分類');
+          leftMeta.appendChild(dateEl);
+          leftMeta.appendChild(folderEl);
+
+          const durEl = document.createElement('span');
+          durEl.textContent = formatDuration(note.totalDurationSec || 0);
+
+          metaRow.appendChild(leftMeta);
+          metaRow.appendChild(durEl);
+
+          const inner = document.createElement('div');
+          inner.appendChild(title);
+          inner.appendChild(metaRow);
+
+          if (appState.selectionMode) {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-2';
+            const checkboxWrap = document.createElement('div');
+            checkboxWrap.className = 'flex-shrink-0';
+            const isSelected = appState.selectedNoteIds.has(note.id);
+            checkboxWrap.innerHTML = isSelected
+              ? '<i data-lucide="check-square" class="w-4 h-4 text-primary"></i>'
+              : '<i data-lucide="square" class="w-4 h-4 text-text-main/40"></i>';
+            row.appendChild(checkboxWrap);
+            row.appendChild(inner);
+            card.appendChild(row);
+          } else {
+            card.appendChild(inner);
+          }
+
+          DOM.notesList.appendChild(card);
+          attachNoteCardEvents(card, note.id);
+        });
+
+        refreshIcons();
+      }
+
+      function attachNoteCardEvents(card, noteId) {
+        let longPressTimer = null;
+        let longPressFired = false;
+
+        function startPress(e) {
+          if (e.type === 'mousedown' && e.button !== 0) return;
+          e.preventDefault();
+          longPressFired = false;
+          clearTimeout(longPressTimer);
+          longPressTimer = setTimeout(function () {
+            longPressFired = true;
+            if (!appState.selectionMode) {
+              enterSelectionMode(noteId);
+            }
+          }, 500);
+        }
+
+        function cancelPress() {
+          clearTimeout(longPressTimer);
+        }
+
+        card.addEventListener('touchstart', startPress, { passive: false });
+        card.addEventListener('touchend', cancelPress);
+        card.addEventListener('touchmove', cancelPress);
+        card.addEventListener('mousedown', startPress);
+        card.addEventListener('mouseup', cancelPress);
+        card.addEventListener('mouseleave', cancelPress);
+        card.addEventListener('contextmenu', function (e) {
+          e.preventDefault();
+        });
+
+        card.addEventListener('click', function (e) {
+          const id = noteId;
+          if (appState.selectionMode) {
+            e.preventDefault();
+            toggleSelection(id);
+            return;
+          }
+          if (longPressFired) {
+            longPressFired = false;
+            return;
+          }
+          openNoteDetail(id);
+        });
+      }
+
+      function enterSelectionMode(initialNoteId) {
+        appState.selectionMode = true;
+        appState.selectedNoteIds = new Set();
+        if (initialNoteId) {
+          appState.selectedNoteIds.add(initialNoteId);
+        }
+        updateBatchUI();
+        renderNotesList();
+        if (DOM.listFabContainer) {
+          DOM.listFabContainer.classList.add('hidden');
+        }
+      }
+
+      function exitSelectionMode() {
+        appState.selectionMode = false;
+        appState.selectedNoteIds = new Set();
+        updateBatchUI();
+        renderNotesList();
+        if (DOM.currentView === 'list' && DOM.listFabContainer) {
+          DOM.listFabContainer.classList.remove('hidden');
+        }
+      }
+
+      function toggleSelection(noteId) {
+        if (!appState.selectionMode) return;
+        if (appState.selectedNoteIds.has(noteId)) {
+          appState.selectedNoteIds.delete(noteId);
+        } else {
+          appState.selectedNoteIds.add(noteId);
+        }
+        if (appState.selectedNoteIds.size === 0) {
+          exitSelectionMode();
+        } else {
+          updateBatchUI();
+          renderNotesList();
+        }
+      }
+
+      function updateBatchUI() {
+        if (!DOM.batchActionBar || !DOM.batchCount) return;
+        if (appState.selectionMode && appState.selectedNoteIds.size > 0) {
+          DOM.batchActionBar.classList.remove('hidden');
+          DOM.batchCount.textContent =
+            '已選取 ' + appState.selectedNoteIds.size + ' 則筆記';
+        } else if (appState.selectionMode) {
+          DOM.batchActionBar.classList.add('hidden');
+        } else {
+          DOM.batchActionBar.classList.add('hidden');
+        }
+        refreshIcons();
+      }
+
+      async function openNoteDetail(noteId) {
+        appState.activeNoteId = noteId;
+        appState.appendTargetNoteId = null;
+        await fillDetailView(noteId);
+        showView('detail');
+      }
+
+      async function fillDetailView(noteId) {
+        const note = appState.notes.find(function (n) {
+          return n.id === noteId;
+        });
+        if (!note) return;
+
+        if (DOM.detailTitleInput) {
+          DOM.detailTitleInput.value = note.title || '';
+        }
+        if (DOM.detailDatetime) {
+          DOM.detailDatetime.textContent = formatDateTime(note.createdAt);
+        }
+        if (DOM.detailText) {
+          DOM.detailText.value = note.text || '';
+        }
+        if (DOM.detailSummary) {
+          DOM.detailSummary.textContent = '共 ' + formatDuration(note.totalDurationSec || 0);
+        }
+
+        const modeDef = MODE_DEFS[note.mode] || MODE_DEFS.summary;
+        if (DOM.detailMode) {
+          DOM.detailMode.textContent = '模式：' + modeDef.label;
+        }
+        if (DOM.detailRegenMode) {
+          DOM.detailRegenMode.value = note.mode || 'summary';
+        }
+
+        fillDetailFolderSelect(note);
+        fillDetailTags(note);
+        await loadSegmentsIntoDetail(noteId);
+
+        refreshIcons();
+      }
+
+      function fillDetailFolderSelect(note) {
+        if (!DOM.detailFolderSelect) return;
+        DOM.detailFolderSelect.innerHTML = '';
+        appState.folders.forEach(function (folder) {
+          const opt = document.createElement('option');
+          opt.value = folder.id;
+          opt.textContent = folder.name;
+          if (note.folderId === folder.id) {
+            opt.selected = true;
+          }
+          DOM.detailFolderSelect.appendChild(opt);
+        });
+      }
+
+      function fillDetailTags(note) {
+        if (!DOM.detailTags) return;
+        DOM.detailTags.innerHTML = '';
+        if (!Array.isArray(note.tags)) note.tags = [];
+        note.tags.forEach(function (tag) {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className =
+            'inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-card-alt text-[11px] text-text-main';
+          const span = document.createElement('span');
+          span.textContent = tag;
+          const icon = document.createElement('i');
+          icon.setAttribute('data-lucide', 'x');
+          icon.className = 'w-3 h-3';
+          chip.appendChild(span);
+          chip.appendChild(icon);
+          chip.addEventListener('click', function (e) {
+            e.stopPropagation();
+            const confirmRemove = window.confirm('要從此筆記移除標籤「' + tag + '」嗎？');
+            if (!confirmRemove) return;
+            const idx = note.tags.indexOf(tag);
+            if (idx !== -1) {
+              note.tags.splice(idx, 1);
+              note.updatedAt = new Date().toISOString();
+              saveNotesToStorage();
+              renderNotesList();
+              fillDetailTags(note);
+            }
+          });
+          DOM.detailTags.appendChild(chip);
+        });
+        refreshIcons();
+      }
+
+      async function loadSegmentsIntoDetail(noteId) {
+        const segments = await getSegmentsByNote(noteId);
+        DOM.segmentsList.innerHTML = '';
+
+        if (!segments.length) {
+          DOM.segmentsEmpty.classList.remove('hidden');
+          return;
+        } else {
+          DOM.segmentsEmpty.classList.add('hidden');
+        }
+
+        segments
+          .sort(function (a, b) {
+            return new Date(a.createdAt) - new Date(b.createdAt);
+          })
+          .forEach(function (segment, index) {
+            const row = document.createElement('div');
+            row.className =
+              'flex items-center justify-between bg-card-alt rounded-xl px-3 py-2';
+
+            const info = document.createElement('div');
+            info.className = 'text-[11px] text-text-main/70';
+            info.textContent =
+              'Segment ' +
+              (index + 1) +
+              ' · ' +
+              formatDuration(segment.duration || 0);
+
+            const playBtn = document.createElement('button');
+            playBtn.type = 'button';
+            playBtn.className =
+              'h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center shadow-soft-card active:scale-95 transition-transform';
+            playBtn.setAttribute('data-segment-id', segment.id);
+            playBtn.innerHTML = PLAY_ICON;
+
+            playBtn.addEventListener('click', function () {
+              playSegmentById(segment.id);
+            });
+
+            row.appendChild(info);
+            row.appendChild(playBtn);
+            DOM.segmentsList.appendChild(row);
+          });
+      }
+
+      async function playSegmentById(segmentId) {
+        const segment = await getSegmentById(segmentId);
+        if (!segment || !segment.blob) return;
+
+        const url = URL.createObjectURL(segment.blob);
+        const audio = new Audio(url);
+        audio.play().catch(function (e) {
+          console.error('播放失敗：', e);
+        });
+        audio.onended = function () {
+          URL.revokeObjectURL(url);
+        };
+      }
+
+      function bindDetailEvents() {
+        if (DOM.detailBack) {
+          DOM.detailBack.addEventListener('click', function () {
+            appState.activeNoteId = null;
+            appState.appendTargetNoteId = null;
+            showView('list');
+          });
+        }
+
+        if (DOM.detailTitleInput) {
+          DOM.detailTitleInput.addEventListener('input', function () {
+            const noteId = appState.activeNoteId;
+            if (!noteId) return;
+            const note = appState.notes.find(function (n) {
+              return n.id === noteId;
+            });
+            if (!note) return;
+            note.title = enforceTitleLength(DOM.detailTitleInput.value || '');
+            note.updatedAt = new Date().toISOString();
+            saveNotesToStorage();
+            renderNotesList();
+          });
+        }
+
+        if (DOM.detailText) {
+          DOM.detailText.addEventListener('input', function () {
+            const noteId = appState.activeNoteId;
+            if (!noteId) return;
+            const note = appState.notes.find(function (n) {
+              return n.id === noteId;
+            });
+            if (!note) return;
+            note.text = DOM.detailText.value;
+            note.updatedAt = new Date().toISOString();
+            saveNotesToStorage();
+            renderNotesList();
+          });
+        }
+
+        if (DOM.appendBtn) {
+          DOM.appendBtn.addEventListener('click', function () {
+            if (!appState.activeNoteId) return;
+            appState.appendTargetNoteId = appState.activeNoteId;
+            showView('home');
+          });
+        }
+
+        if (DOM.detailCopyBtn) {
+          DOM.detailCopyBtn.addEventListener('click', handleCopyNote);
+        }
+        if (DOM.detailShareBtn) {
+          DOM.detailShareBtn.addEventListener('click', handleShareNote);
+        }
+        if (DOM.detailDeleteBtn) {
+          DOM.detailDeleteBtn.addEventListener('click', handleDeleteNote);
+        }
+
+        if (DOM.detailRegenBtn && DOM.detailRegenMode) {
+          DOM.detailRegenBtn.addEventListener('click', async function () {
+            const noteId = appState.activeNoteId;
+            if (!noteId) return;
+            const note = appState.notes.find(function (n) { return n.id === noteId; });
+            if (!note) return;
+
+            const apiKey = getOpenAIApiKey();
+            if (!apiKey) {
+              alert('請先在「設定」中輸入 OpenAI API Key。');
+              return;
+            }
+
+            const newMode = DOM.detailRegenMode.value in MODE_DEFS
+              ? DOM.detailRegenMode.value
+              : (note.mode || 'summary');
+
+            const source = (note.transcript && note.transcript.trim()) ||
+                           (note.text && note.text.trim());
+            if (!source) {
+              alert('目前沒有可供重新生成的內容。');
+              return;
+            }
+
+            try {
+              DOM.detailRegenBtn.disabled = true;
+              DOM.detailRegenBtn.textContent = '生成中';
+              const result = await rewriteFromTranscript(source, newMode, apiKey);
+              const content = result.content || source;
+              const folderName = result.folderName || '';
+              const tags = Array.isArray(result.tags) ? result.tags : [];
+
+              note.mode = newMode;
+              note.text = content;
+              note.title = enforceTitleLength(
+                result.title || deriveTitleFromText(note.text)
+              );
+
+              if (appState.autoCategorize) {
+                applyFolderAndTagsFromAI(note, folderName, tags);
+              }
+
+              note.updatedAt = new Date().toISOString();
+              saveNotesToStorage();
+              renderNotesList();
+              fillDetailView(noteId);
+            } catch (err) {
+              alert('重新生成失敗：' + (err.message || err));
+            } finally {
+              DOM.detailRegenBtn.disabled = false;
+              DOM.detailRegenBtn.textContent = '重新生成';
+            }
+          });
+        }
+
+        if (DOM.detailFolderSelect) {
+          DOM.detailFolderSelect.addEventListener('change', function () {
+            const noteId = appState.activeNoteId;
+            if (!noteId) return;
+            const note = appState.notes.find(function (n) { return n.id === noteId; });
+            if (!note) return;
+            note.folderId = DOM.detailFolderSelect.value;
+            note.updatedAt = new Date().toISOString();
+            saveNotesToStorage();
+            renderNotesList();
+            renderCalendar();
+          });
+        }
+
+        if (DOM.detailAddTagBtn) {
+          DOM.detailAddTagBtn.addEventListener('click', function () {
+            const noteId = appState.activeNoteId;
+            if (!noteId) return;
+            const note = appState.notes.find(function (n) { return n.id === noteId; });
+            if (!note) return;
+
+            const suggestion = appState.tags.length
+              ? '目前已有標籤：' + appState.tags.join('、') + '\n'
+              : '';
+            const name = window.prompt(
+              suggestion + '請輸入要加入此筆記的標籤名稱：'
+            );
+            const trimmed = (name || '').trim();
+            if (!trimmed) return;
+            ensureGlobalTagExists(trimmed);
+            if (!note.tags.includes(trimmed)) {
+              note.tags.push(trimmed);
+              note.updatedAt = new Date().toISOString();
+              saveNotesToStorage();
+              renderNotesList();
+              fillDetailTags(note);
+            }
+          });
+        }
+      }
+
+      async function handleCopyNote() {
+        const noteId = appState.activeNoteId;
+        if (!noteId) return;
+        const note = appState.notes.find(function (n) { return n.id === noteId; });
+        if (!note || !note.text) {
+          alert('目前沒有可複製的文字。');
+          return;
+        }
+
+        const text = note.text;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try {
+            await navigator.clipboard.writeText(text);
+            alert('已複製到剪貼簿。');
+            return;
+          } catch (e) {
+            console.warn('clipboard API 失敗：', e);
+          }
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+          document.execCommand('copy');
+          alert('已複製到剪貼簿。');
+        } catch (e) {
+          alert('複製失敗：' + (e.message || e));
+        }
+        document.body.removeChild(textarea);
+      }
+
+      async function handleShareNote() {
+        const noteId = appState.activeNoteId;
+        if (!noteId) return;
+        const note = appState.notes.find(function (n) { return n.id === noteId; });
+        if (!note) return;
+
+        if (!navigator.share) {
+          alert('此裝置或瀏覽器不支援分享功能。');
+          return;
+        }
+
+        try {
+          await navigator.share({
+            title: note.title || '語音筆記',
+            text: note.text || ''
+          });
+        } catch (e) {
+          if (e && e.name === 'AbortError') return;
+          alert('分享失敗：' + (e.message || e));
+        }
+      }
+
+      async function handleDeleteNote() {
+        const noteId = appState.activeNoteId;
+        if (!noteId) return;
+
+        const confirmDelete = window.confirm('確定要刪除此筆記及所有錄音片段嗎？此操作無法復原。');
+        if (!confirmDelete) return;
+
+        await deleteNoteById(noteId);
+        appState.activeNoteId = null;
+        appState.appendTargetNoteId = null;
+        showView('list');
+      }
+
+      async function deleteNoteById(noteId) {
+        const index = appState.notes.findIndex(function (n) { return n.id === noteId; });
+        if (index === -1) return;
+        appState.notes.splice(index, 1);
+        saveNotesToStorage();
+        renderNotesList();
+        renderCalendar();
+        try {
+          await deleteSegmentsByNote(noteId);
+        } catch (e) {
+          console.warn('刪除音訊片段時發生錯誤：', e);
+        }
+      }
+
+      // ====== List FAB & 批次操作 ======
+      function bindListFabsAndBatch() {
+        if (DOM.fabCreateFolder) {
+          DOM.fabCreateFolder.addEventListener('click', function () {
+            const name = window.prompt('請輸入新資料夾名稱：');
+            const trimmed = (name || '').trim();
+            if (!trimmed) return;
+            const existing = getFolderByName(trimmed);
+            if (existing) {
+              alert('已存在同名資料夾。');
+              return;
+            }
+            const folder = {
+              id: 'folder_' + Date.now(),
+              name: trimmed,
+              createdAt: new Date().toISOString()
+            };
+            appState.folders.push(folder);
+            saveFolders();
+            alert('已建立資料夾「' + trimmed + '」。');
+            if (appState.activeNoteId && DOM.detailFolderSelect) {
+              const note = appState.notes.find(function (n) { return n.id === appState.activeNoteId; });
+              if (note) {
+                fillDetailFolderSelect(note);
+              }
+            }
+          });
+        }
+
+        if (DOM.fabCreateTag) {
+          DOM.fabCreateTag.addEventListener('click', function () {
+            const name = window.prompt('請輸入要建立的標籤名稱：');
+            const trimmed = (name || '').trim();
+            if (!trimmed) return;
+            if (appState.tags.includes(trimmed)) {
+              alert('此標籤已存在。');
+              return;
+            }
+            appState.tags.push(trimmed);
+            saveTags();
+            alert('已建立標籤「' + trimmed + '」。');
+          });
+        }
+
+        if (DOM.batchCancelBtn) {
+          DOM.batchCancelBtn.addEventListener('click', function () {
+            exitSelectionMode();
+          });
+        }
+
+        if (DOM.batchDeleteBtn) {
+          DOM.batchDeleteBtn.addEventListener('click', async function () {
+            if (!appState.selectionMode || appState.selectedNoteIds.size === 0) return;
+            const confirmDelete = window.confirm(
+              '確定要刪除選取的 ' + appState.selectedNoteIds.size + ' 則筆記與其錄音片段嗎？'
+            );
+            if (!confirmDelete) return;
+            const ids = Array.from(appState.selectedNoteIds);
+            for (const id of ids) {
+              await deleteNoteById(id);
+            }
+            exitSelectionMode();
+          });
+        }
+
+        if (DOM.batchMoveFolderBtn) {
+          DOM.batchMoveFolderBtn.addEventListener('click', function () {
+            if (!appState.selectionMode || appState.selectedNoteIds.size === 0) return;
+            if (!appState.folders.length) {
+              alert('目前尚無資料夾可供移動。');
+              return;
+            }
+            const lines = appState.folders.map(function (f, idx) {
+              return (idx + 1) + '. ' + f.name;
+            }).join('\n');
+            const input = window.prompt(
+              '請輸入要移動到的資料夾編號：\n' + lines
+            );
+            if (!input) return;
+            const idx = Number(input) - 1;
+            if (Number.isNaN(idx) || idx < 0 || idx >= appState.folders.length) {
+              alert('無效的編號。');
+              return;
+            }
+            const targetFolder = appState.folders[idx];
+            const ids = Array.from(appState.selectedNoteIds);
+            ids.forEach(function (id) {
+              const note = appState.notes.find(function (n) { return n.id === id; });
+              if (note) {
+                note.folderId = targetFolder.id;
+                note.updatedAt = new Date().toISOString();
+              }
+            });
+            saveNotesToStorage();
+            renderNotesList();
+            renderCalendar();
+            exitSelectionMode();
+          });
+        }
+      }
+
+      // ====== 設定 Modal ======
+      function initSettingsModal() {
+        if (!DOM.settingsBtn || !DOM.settingsModal) return;
+
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY_OPENAI) || '';
+          if (DOM.settingsInput) {
+            DOM.settingsInput.value = stored;
+          }
+        } catch (e) {
+          console.warn('讀取 OpenAI API Key 失敗：', e);
+        }
+
+        if (DOM.settingsAutoCategorize) {
+          DOM.settingsAutoCategorize.checked = appState.autoCategorize;
+        }
+        if (DOM.settingsAutoCategorizeLabel) {
+          DOM.settingsAutoCategorizeLabel.textContent = appState.autoCategorize ? '開啟' : '關閉';
+        }
+
+        function openSettings() {
+          if (!DOM.settingsModal) return;
+          appState.isSettingsOpen = true;
+          DOM.settingsModal.classList.remove('pointer-events-none', 'opacity-0');
+          DOM.settingsModal.setAttribute('aria-hidden', 'false');
+          if (DOM.settingsInput) {
+            setTimeout(function () {
+              DOM.settingsInput.focus();
+            }, 50);
+          }
+          refreshIcons();
+        }
+
+        function closeSettings() {
+          if (!DOM.settingsModal) return;
+          appState.isSettingsOpen = false;
+          DOM.settingsModal.classList.add('pointer-events-none', 'opacity-0');
+          DOM.settingsModal.setAttribute('aria-hidden', 'true');
+        }
+
+        DOM.settingsBtn.addEventListener('click', function () {
+          if (appState.isSettingsOpen) {
+            closeSettings();
+          } else {
+            openSettings();
+          }
+        });
+
+        if (DOM.settingsClose) {
+          DOM.settingsClose.addEventListener('click', function () {
+            closeSettings();
+          });
+        }
+
+        DOM.settingsModal.addEventListener('click', function (e) {
+          if (e.target === DOM.settingsModal) {
+            closeSettings();
+          }
+        });
+
+        if (DOM.settingsSave) {
+          DOM.settingsSave.addEventListener('click', function () {
+            if (!DOM.settingsInput) return;
+            const value = DOM.settingsInput.value.trim();
+            try {
+              localStorage.setItem(STORAGE_KEY_OPENAI, value);
+              if (DOM.settingsSaved) {
+                DOM.settingsSaved.classList.remove('hidden');
+                setTimeout(function () {
+                  DOM.settingsSaved.classList.add('hidden');
+                }, 1600);
+              }
+            } catch (e) {
+              console.error('儲存 OpenAI API Key 失敗：', e);
+            }
+          });
+        }
+
+        if (DOM.settingsAutoCategorize) {
+          DOM.settingsAutoCategorize.addEventListener('change', function () {
+            appState.autoCategorize = !!DOM.settingsAutoCategorize.checked;
+            saveAutoCategorizeSetting();
+            if (DOM.settingsAutoCategorizeLabel) {
+              DOM.settingsAutoCategorizeLabel.textContent = appState.autoCategorize ? '開啟' : '關閉';
+            }
+          });
+        }
+
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && appState.isSettingsOpen) {
+            closeSettings();
+          }
+        });
+      }
+
+      // ====== OpenAI 轉錄 + 重寫（含資料夾與標籤） ======
+      async function transcribeWithWhisper(blob, apiKey) {
+        if (!apiKey) {
+          throw new Error('缺少 OpenAI API Key。');
+        }
+        try {
+          const file = new File([blob], 'audio.webm', { type: blob.type || 'audio/webm' });
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('model', 'whisper-1');
+          formData.append('language', 'zh');
+
+          const resp = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: {
+              Authorization: 'Bearer ' + apiKey
+            },
+            body: formData
+          });
+
+          if (!resp.ok) {
+            let errorMessage = 'Whisper 請求失敗：HTTP ' + resp.status;
+            try {
+              const errData = await resp.json();
+              if (errData && errData.error && errData.error.message) {
+                errorMessage = 'Whisper 請求失敗：' + errData.error.message;
+              }
+            } catch (_) {}
+            throw new Error(errorMessage);
+          }
+
+          const data = await resp.json();
+          const transcript = (data && data.text) || '';
+          return transcript;
+        } catch (err) {
+          throw new Error(err.message || 'Whisper 請求失敗');
+        }
+      }
+
+      function getSystemPrompt(mode) {
+        const folderNames = appState.folders.map(function (f) { return f.name; });
+        const folderListText = folderNames.length
+          ? '目前使用者擁有的資料夾列表為：' + folderNames.join('、') + '。'
+          : '目前使用者尚未建立任何自訂資料夾，僅有「未分類」。';
+
+        const base =
+          '你是一位專門整理語音筆記的助手，請使用繁體中文回覆。' +
+          '你必須只輸出 JSON 格式，不能有任何多餘文字或解說。' +
+          'JSON 結構嚴格為：{"title": "...", "content": "...", "folderName": "...", "tags": ["...", "...", "..."]}。' +
+          'title 需有意義且不超過 7 個字（包含標點），content 為整理後的完整內容。' +
+          folderListText +
+          '請根據內容，從上述資料夾列表中選出最適合的一個，並填入 JSON 的 folderName 欄位；' +
+          '如果都不適合，folderName 請填「未分類」。' +
+          '另外請自動生成 3 個與內容高度相關的標籤字串，放在 JSON 的 tags 陣列中。';
+
+        let modePart = '';
+        if (mode === 'verbose') {
+          modePart =
+            '模式：詳盡逐字。請修正語病、贅字、口吃，讓語句通順合理，但保留完整資訊量。' +
+            '不要刪減資訊，也不要過度延伸。';
+        } else if (mode === 'fun') {
+          modePart =
+            '模式：幽默風格。請改寫成輕鬆幽默的敘事風格，但嚴格控制長度，字數必須在原始輸入字數的 ±15% 以內，' +
+            '禁止大幅縮寫或灌水。';
+        } else if (mode === 'formal') {
+          modePart =
+            '模式：嚴肅職場。請整理成條理分明、適合職場閱讀的筆記，可以使用條列式，語氣正式專業。';
+        } else {
+          modePart =
+            '模式：精煉重點。請整理為短篇重點摘要，保留最重要的決策、想法與行動項目，語氣溫暖、內省。';
+        }
+        return base + ' ' + modePart;
+      }
+
+      async function rewriteFromTranscript(transcript, mode, apiKey) {
+        if (!apiKey) {
+          throw new Error('缺少 OpenAI API Key。');
+        }
+        const systemPrompt = getSystemPrompt(mode);
+        try {
+          const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: 'Bearer ' + apiKey
+            },
+            body: JSON.stringify({
+              model: 'gpt-4o-mini',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                {
+                  role: 'user',
+                  content: '以下是語音逐字稿內容，請依指定模式整理並回覆 JSON：\n\n' + transcript
+                }
+              ],
+              temperature: 0.6,
+              response_format: { type: 'json_object' }
+            })
+          });
+
+          if (!resp.ok) {
+            let errorMessage = 'GPT 重寫請求失敗：HTTP ' + resp.status;
+            try {
+              const errData = await resp.json();
+              if (errData && errData.error && errData.error.message) {
+                errorMessage = 'GPT 重寫請求失敗：' + errData.error.message;
+              }
+            } catch (_) {}
+            throw new Error(errorMessage);
+          }
+
+          const data = await resp.json();
+          const choice = data && data.choices && data.choices[0];
+          if (!choice || !choice.message) {
+            throw new Error('GPT 回應格式不正確。');
+          }
+
+          let raw = choice.message.content;
+          let result = null;
+
+          if (typeof raw === 'string') {
+            try {
+              result = JSON.parse(raw);
+            } catch (e) {
+              const start = raw.indexOf('{');
+              const end = raw.lastIndexOf('}');
+              if (start !== -1 && end > start) {
+                try {
+                  result = JSON.parse(raw.slice(start, end + 1));
+                } catch (e2) {
+                  console.warn('JSON 解析失敗，改用備援標題與內容。', e2);
+                }
+              }
+            }
+          } else if (raw && typeof raw === 'object') {
+            result = raw;
+          }
+
+          if (!result || typeof result !== 'object') {
+            return {
+              title: deriveTitleFromText(transcript),
+              content: transcript,
+              folderName: '未分類',
+              tags: []
+            };
+          }
+
+          const title = enforceTitleLength(
+            result.title || deriveTitleFromText(transcript)
+          );
+          const content = (result.content && String(result.content)) || transcript;
+          const folderName = (result.folderName && String(result.folderName)) || '未分類';
+          let tags = [];
+          if (Array.isArray(result.tags)) {
+            tags = result.tags.map(function (t) { return String(t).trim(); })
+              .filter(function (t) { return t.length > 0; });
+          }
+
+          return { title, content, folderName, tags };
+        } catch (err) {
+          throw new Error(err.message || 'GPT 重寫請求失敗');
+        }
+      }
+
+      async function transcribeAndRewriteNewSegment(blob, mode, apiKey) {
+        const transcript = await transcribeWithWhisper(blob, apiKey);
+        if (!transcript || !transcript.trim()) {
+          return { transcript: '', title: '', content: '', folderName: '未分類', tags: [] };
+        }
+        const rewritten = await rewriteFromTranscript(transcript, mode, apiKey);
+        return {
+          transcript: transcript,
+          title: rewritten.title,
+          content: rewritten.content,
+          folderName: rewritten.folderName,
+          tags: rewritten.tags
+        };
+      }
+
+      // ====== 日曆 ======
+      function bindCalendarEvents() {
+        if (DOM.calPrevBtn) {
+          DOM.calPrevBtn.addEventListener('click', function () {
+            appState.calendarMonth -= 1;
+            if (appState.calendarMonth < 0) {
+              appState.calendarMonth = 11;
+              appState.calendarYear -= 1;
+            }
+            renderCalendar();
+          });
+        }
+
+        if (DOM.calNextBtn) {
+          DOM.calNextBtn.addEventListener('click', function () {
+            appState.calendarMonth += 1;
+            if (appState.calendarMonth > 11) {
+              appState.calendarMonth = 0;
+              appState.calendarYear += 1;
+            }
+            renderCalendar();
+          });
+        }
+      }
+
+      function renderCalendar() {
+        if (!DOM.calGrid || !DOM.calMonthLabel) return;
+
+        const year = appState.calendarYear;
+        const month = appState.calendarMonth;
+
+        const monthLabel = year + ' 年 ' + (month + 1) + ' 月';
+        DOM.calMonthLabel.textContent = monthLabel;
+
+        const notesByDate = {};
+        appState.notes.forEach(function (note) {
+          const d = new Date(note.createdAt);
+          const key = formatDateKey(d);
+          if (!notesByDate[key]) notesByDate[key] = [];
+          notesByDate[key].push(note);
+        });
+
+        DOM.calGrid.innerHTML = '';
+
+        const firstDay = new Date(year, month, 1);
+        const firstWeekday = firstDay.getDay();
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+        for (let i = 0; i < firstWeekday; i++) {
+          const blank = document.createElement('div');
+          blank.className = 'h-8';
+          DOM.calGrid.appendChild(blank);
+        }
+
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dateObj = new Date(year, month, day);
+          const key = formatDateKey(dateObj);
+          const hasNotes = !!notesByDate[key];
+
+          const btn = document.createElement('button');
+          btn.type = 'button';
+
+          const isSelected = appState.calendarSelectedDateStr === key;
+          btn.className =
+            'h-8 w-8 mx-auto flex flex-col items-center justify-center rounded-full text-[11px] ' +
+            (isSelected
+              ? 'bg-primary text-white'
+              : 'text-text-main hover:bg-accent/70');
+
+          const daySpan = document.createElement('span');
+          daySpan.textContent = String(day);
+          btn.appendChild(daySpan);
+
+          if (hasNotes) {
+            const dot = document.createElement('span');
+            dot.className =
+              'mt-[2px] h-1.5 w-1.5 rounded-full ' +
+              (isSelected ? 'bg-white' : 'bg-primary');
+            btn.appendChild(dot);
+          }
+
+          btn.addEventListener('click', function () {
+            appState.calendarSelectedDateStr = key;
+            renderCalendar();
+          });
+
+          DOM.calGrid.appendChild(btn);
+        }
+
+        renderCalendarDayNotes(notesByDate);
+      }
+
+      function renderCalendarDayNotes(notesByDate) {
+        if (!DOM.calDayNotes || !DOM.calSelectedLabel) return;
+
+        const selectedKey = appState.calendarSelectedDateStr;
+        if (!selectedKey) {
+          DOM.calSelectedLabel.textContent = '選擇日期以查看當天的筆記。';
+        } else {
+          DOM.calSelectedLabel.textContent = selectedKey + ' 的筆記';
+        }
+
+        DOM.calDayNotes.innerHTML = '';
+
+        if (!selectedKey || !notesByDate[selectedKey] || !notesByDate[selectedKey].length) {
+          const empty = document.createElement('div');
+          empty.className = 'text-[12px] text-text-main/70';
+          empty.textContent = '這天沒有筆記。';
+          DOM.calDayNotes.appendChild(empty);
+          return;
+        }
+
+        notesByDate[selectedKey]
+          .slice()
+          .sort(function (a, b) {
+            return new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt);
+          })
+          .forEach(function (note) {
+            const card = document.createElement('button');
+            card.type = 'button';
+            card.setAttribute('data-note-id', note.id);
+            card.className =
+              'w-full text-left bg-card rounded-2xl px-3 py-2 shadow-soft-card hover:-translate-y-0.5 transition-transform';
+
+            const title = document.createElement('div');
+            title.className = 'font-display font-semibold text-[14px] text-text-main truncate mb-0.5';
+            title.textContent = note.title || '未命名筆記';
+
+            const meta = document.createElement('div');
+            meta.className = 'text-[10px] text-text-main/60';
+            meta.textContent = formatDuration(note.totalDurationSec || 0);
+
+            card.appendChild(title);
+            card.appendChild(meta);
+
+            card.addEventListener('click', function () {
+              openNoteDetail(note.id);
+            });
+
+            DOM.calDayNotes.appendChild(card);
+          });
+      }
+    })();
+  </script>
+</body>
+</html>

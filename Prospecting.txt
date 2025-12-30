@@ -1,0 +1,64 @@
+Prospecting 
+Problem: cannot keep track on the leads coming in. CRM tedious
+Automate the leads coming in, best to have a brief of the conversation, when it’s called, and schedule the next follow up date
+
+Problem: follow up conversation takes up to 6 hours a week. Shorten the time if possible 
+With the different conversation, draft up the follow up conversation and send via automation
+
+Problem: too much sources of news. Needs compilation and sending out 
+Send automation of news and upcoming information of property matters, how it affect 
+
+viewing
+Problem: time taken to schedule and reply messages for open house is too long. Sometimes hard to schedule them together
+Schedule viewing timing for open house and qualify the enquiries before hand
+
+follow up after viewing
+Problem: when too many listings we’re having open house on the same day things can get intertwined 
+-quick follow up and addressing of issues the following day
+
+*automate a list of buyers coming to view such that if there are similar listings that were posted up, it can be directly posted to them.
+
+
+項目全貌回顧 (Project Roadmap Check)
+為了確保不偏離方向，這是我們之後要繼續完成的模組：
+
+✅ 當前進度：潛在客戶錄入 (Prospecting Input)
+
+Status: 正在完善 saveLead 函數 (OpenAI版本)。
+
+we need 4 ways to capture leads
+
+1. screenshot
+
+2. voice record
+
+3.manual key in
+
+4. Build a form for client to input
+
+
+4 of them need to consolidate into the same spreadsheet.
+
+
+
+Except for the current details, we still need client's birthday, priority (drop down: High, medium, low, first contact (default as the creation date), lead source, remarks (free key in),
+
+
+
+and the follow up date, with the add to calendar button (we have build the add to calendar)
+
+⏳ 下一步：智慧跟進 (Smart Follow-up)
+
+Goal: 解決每週 6 小時的跟進時間。根據錄入的資料，自動草擬跟進訊息。
+
+📅 看房管理 (Viewing & Scheduling)
+
+Goal: 自動安排 Open House 時間，並在看房前篩選客戶。
+
+📢 資訊彙整 (News Automation)
+
+Goal: 自動整理房產新聞並發送給相關客戶。
+
+🤝 買家配對 (Buyer Matching)
+
+Goal: 有新房源上市時，自動通知曾看過類似房源的買家。

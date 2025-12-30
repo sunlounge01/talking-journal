@@ -182,6 +182,7 @@ export default function Home() {
   const audioChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const homeCanvasRef = useRef<HTMLCanvasElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // 初始化
   useEffect(() => {
@@ -210,7 +211,6 @@ export default function Home() {
 
   // 初始化靜態視覺化器
   useEffect(() => {
-    // 延遲一下確保 canvas 已經渲染
     const timer = setTimeout(() => {
       drawStaticBars();
     }, 100);
@@ -229,7 +229,6 @@ export default function Home() {
     setTimeout(() => setShowSettingsAlert(false), 2000);
   };
 
-  // 獲取當前主題顏色
   const getTheme = (): ThemeColors => {
     if (currentTheme === 'custom' && Object.keys(customThemeColors).length > 0) {
       return { ...THEMES.green, ...customThemeColors } as ThemeColors;
@@ -239,14 +238,14 @@ export default function Home() {
   
   const theme = getTheme();
 
-  // --- 繪製靜態膠囊條的函數 - 29個交替顏色 ---
+  // --- 繪製靜態膠囊條 ---
   const drawStaticBars = () => {
     const canvas = homeCanvasRef.current;
     const ctx = canvas?.getContext('2d');
     if (!ctx || !canvas) return;
     
     const currentThemeColors = getTheme();
-    const bars = 29; // 29個膠囊
+    const bars = 29; 
     const gap = 3;
     const barWidth = 6;
     const totalWidth = bars * (barWidth + gap) - gap;
@@ -265,40 +264,41 @@ export default function Home() {
         baseHeight,
         barWidth / 2
       );
-      // 交替顏色：偶數索引用深綠，奇數索引用淺綠
       ctx.fillStyle = i % 2 === 0 ? currentThemeColors.visualizerActive : currentThemeColors.visualizerInactive;
       ctx.fill();
     }
   };
 
-  // --- 視覺化 (Visualizer) - 支援動態主題 ---
+  // --- 視覺化 (Visualizer) ---
   const initVisualizer = (stream: MediaStream) => {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     const audioCtx = new AudioContextClass();
+    audioContextRef.current = audioCtx; // 存起來以便之後關閉
+
     if (audioCtx.state === 'suspended') audioCtx.resume();
     
     const analyser = audioCtx.createAnalyser();
     const source = audioCtx.createMediaStreamSource(stream);
     source.connect(analyser);
-    analyser.fftSize = 64; // 控制條的數量密度
+    analyser.fftSize = 64;
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     const canvas = homeCanvasRef.current;
     const ctx = canvas?.getContext('2d');
-    const currentThemeColors = getTheme();
-
+    
+    // 取得當前顏色的閉包
     const draw = () => {
       if (mediaRecorderRef.current?.state !== 'recording') {
-        // 停止時顯示靜態條
         drawStaticBars();
         return;
       }
       requestAnimationFrame(draw);
       analyser.getByteFrequencyData(dataArray);
       
+      const currentThemeColors = getTheme(); // 每次繪製都重新獲取主題顏色
+
       if (ctx && canvas) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // 設定繪圖參數 - 29個膠囊，交替顏色
         const bars = 29;
         const gap = 3;
         const barWidth = 6;
@@ -307,14 +307,10 @@ export default function Home() {
         const centerY = canvas.height / 2;
 
         for (let i = 0; i < bars; i++) {
-          // 取得音量強度 (0~1)
           const value = dataArray[i % dataArray.length] / 255;
-          
-          // 計算高度：基礎高度 + 音量增幅
           const baseHeight = 8; 
           const height = baseHeight + (value * 25); 
           
-          // 繪製圓角矩形 (膠囊狀)
           ctx.beginPath();
           ctx.roundRect(
             startX + i * (barWidth + gap), 
@@ -324,7 +320,6 @@ export default function Home() {
             barWidth / 2
           );
           
-          // 交替顏色：偶數索引用深綠，奇數索引用淺綠（有聲音時深綠會變高）
           if (value > 0.1) {
             ctx.fillStyle = i % 2 === 0 ? currentThemeColors.visualizerActive : currentThemeColors.visualizerInactive;
           } else {
@@ -341,7 +336,7 @@ export default function Home() {
   const startRecording = async (isAppend = false) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      initVisualizer(stream); // 無論是否追加都初始化視覺化器
+      initVisualizer(stream);
       const mr = new MediaRecorder(stream);
       mediaRecorderRef.current = mr;
       audioChunksRef.current = [];
@@ -354,74 +349,87 @@ export default function Home() {
     } catch (err) { alert('無法存取麥克風，請檢查權限。'); }
   };
 
+  // 🔥【修正】處理停止錄音與 JSON 上傳
   const handleStop = async (isAppend = false) => {
     const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
     setStatus('AI 正在思考中...');
+
+    // 關閉 AudioContext 釋放資源
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        audioContextRef.current.close();
+    }
     
-    try {
-      const headers: HeadersInit = {};
-      if (apiKey) headers['x-openai-key'] = apiKey;
+    // 將 Blob 轉為 Base64 (解決 400 Error 的關鍵)
+    const reader = new FileReader();
+    reader.readAsDataURL(blob);
 
-      const fd = new FormData(); 
-      fd.append('file', blob, 'audio.webm');
-      fd.append('prompt', customVocab);
+    reader.onloadend = async () => {
+        const base64Audio = (reader.result as string).split(',')[1];
+        
+        try {
+           const headers: HeadersInit = {
+             'Content-Type': 'application/json', // 告訴後端這是 JSON
+           };
+           if (apiKey) headers['x-openai-key'] = apiKey;
 
-      const transRes = await fetch('/api/transcribe', { method: 'POST', headers, body: fd });
-      const transData = await transRes.json();
-      if (!transRes.ok) throw new Error(transData.error || '轉錄失敗');
-      const text = transData.text;
+           // 呼叫我們剛剛修好的統一 API (/api/chat)
+           const response = await fetch('/api/chat', { 
+             method: 'POST', 
+             headers, 
+             body: JSON.stringify({
+                audio: base64Audio, 
+                message: "請幫我整理這段語音筆記",
+                // 傳遞前端設定的提示詞給後端 (如果後端有支援的話，或是僅依賴後端預設)
+                customPrompt: customVocab 
+             }) 
+           });
 
-      // 如果選擇自訂模式且有自訂提示詞，使用自訂提示詞
-      const styleToUse = selectedMode === 'custom' && customModePrompt 
-        ? customModePrompt 
-        : customStylePrompt;
+           if (!response.ok) {
+             const errData = await response.json();
+             throw new Error(errData.error || '處理失敗');
+           }
 
-      const rewriteHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (apiKey) {
-        rewriteHeaders['x-openai-key'] = apiKey;
-      }
+           const data = await response.json();
+           const text = data.text; // 這是後端回傳的文字結果
 
-      const rwRes = await fetch('/api/rewrite', { 
-        method: 'POST', 
-        headers: rewriteHeaders,
-        body: JSON.stringify({ text, mode: selectedMode, customStyle: styleToUse }) 
-      });
-      const ai = await rwRes.json();
-      if (!rwRes.ok) throw new Error(ai.error || '改寫失敗');
+           // 建立新筆記物件
+           const newSegment = { id: Date.now().toString(), duration: recordingTime, timestamp: Date.now() };
+           
+           if (isAppend && currentNote) {
+             const updated = {
+               ...currentNote,
+               content: currentNote.content + '\n\n' + text,
+               totalDuration: currentNote.totalDuration + recordingTime,
+               segments: [...currentNote.segments, newSegment]
+             };
+             setNotes(prev => prev.map(n => n.id === currentNote.id ? updated : n));
+             setCurrentNote(updated);
+           } else {
+             const newNote: Note = {
+               id: Date.now().toString(),
+               title: '新的語音筆記 ' + new Date().toLocaleString(), // 暫時用時間當標題
+               content: text,
+               createdAt: Date.now(),
+               totalDuration: recordingTime,
+               segments: [newSegment],
+               mode: selectedMode,
+               tags: [],
+               folderId: 'default'
+             };
+             setNotes(prev => [newNote, ...prev]);
+             setCurrentNote(newNote);
+             setCurrentView('detail');
+           }
 
-      const newSegment = { id: Date.now().toString(), duration: recordingTime, timestamp: Date.now() };
-
-      if (isAppend && currentNote) {
-        const updated = {
-          ...currentNote,
-          content: currentNote.content + '\n\n' + (ai.content || text),
-          totalDuration: currentNote.totalDuration + recordingTime,
-          segments: [...currentNote.segments, newSegment]
-        };
-        setNotes(prev => prev.map(n => n.id === currentNote.id ? updated : n));
-        setCurrentNote(updated);
-      } else {
-        const newNote: Note = {
-          id: Date.now().toString(),
-          title: ai.title || '新筆記',
-          content: ai.content || text,
-          createdAt: Date.now(),
-          totalDuration: recordingTime,
-          segments: [newSegment],
-          mode: selectedMode,
-          tags: ai.tags || [],
-          folderId: 'default'
-        };
-        setNotes(prev => [newNote, ...prev]);
-        setCurrentNote(newNote);
-        setCurrentView('detail');
-      }
-    } catch (e: any) { alert(`處理失敗: ${e.message}`); }
-    
-    setStatus(''); setIsRecording(false); 
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        } catch (e: any) { 
+            alert(`處理失敗: ${e.message}`); 
+            setStatus('發生錯誤');
+        } finally {
+            setStatus(''); 
+            setIsRecording(false); 
+            if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+        }
+    };
   };
 
   const deleteNote = (id: string) => {
@@ -431,53 +439,14 @@ export default function Home() {
     }
   };
 
-  // 重新生成筆記內容
+  // 暫時簡化的重新生成功能 (尚未實作後端 JSON 對應)
   const regenerateNote = async () => {
-    if (!currentNote) return;
-    
-    setStatus('AI 正在重新生成...');
-    try {
-      const headers: HeadersInit = {};
-      if (apiKey) headers['x-openai-key'] = apiKey;
-
-      // 獲取原始轉錄文字（這裡簡化處理，實際應該保存原始文字）
-      const originalText = currentNote.content; // 暫時使用當前內容
-      
-      const styleToUse = currentNote.mode === 'custom' && customModePrompt 
-        ? customModePrompt 
-        : customStylePrompt;
-      
-      const rewriteHeaders: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (apiKey) {
-        rewriteHeaders['x-openai-key'] = apiKey;
-      }
-
-      const rwRes = await fetch('/api/rewrite', { 
-        method: 'POST', 
-        headers: rewriteHeaders,
-        body: JSON.stringify({ text: originalText, mode: currentNote.mode, customStyle: styleToUse }) 
-      });
-      const ai = await rwRes.json();
-      if (!rwRes.ok) throw new Error(ai.error || '改寫失敗');
-
-      const updated = {
-        ...currentNote,
-        content: ai.content || originalText,
-        title: ai.title || currentNote.title,
-      };
-      setCurrentNote(updated);
-      setNotes(prev => prev.map(n => n.id === currentNote.id ? updated : n));
-    } catch (e: any) { 
-      alert(`重新生成失敗: ${e.message}`); 
-    }
-    setStatus('');
+    alert("重新生成功能將在下一版後端更新中提供！");
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
 
-  // --- 介面渲染 (支援動態主題) ---
+  // --- 介面渲染 ---
   return (
     <main 
       className="min-h-screen flex flex-col font-sans overflow-hidden relative transition-colors"
@@ -492,18 +461,20 @@ export default function Home() {
         <div className="flex-1 flex flex-col p-6 pb-32 animate-in slide-in-from-right duration-300 overflow-y-auto max-w-md mx-auto w-full">
           {/* Header */}
           <div className="mb-6 pt-4">
-            <p className="text-[#88A088] text-[10px] font-bold tracking-[0.3em] uppercase mb-1">TALKING JOURNAL</p>
-            <h1 className="text-3xl font-extrabold text-[#4A7C59] tracking-tight mb-4">Soft Voice Notes</h1>
-            <button onClick={() => setCurrentView('list')} className="flex items-center text-[#6A8C6A] text-sm font-bold hover:text-[#4A7C59] transition-colors"><ChevronLeft size={16}/> 返回</button>
+            <p className="text-[#88A088] text-[10px] font-bold tracking-[0.3em] uppercase mb-1">THE WALKING JOURNAL</p>
+            <h1 className="text-3xl font-extrabold tracking-tight mb-4" style={{color: theme.primary}}>Soft Voice Notes</h1>
+            <button onClick={() => setCurrentView('list')} className="flex items-center text-sm font-bold transition-colors" style={{color: theme.textSecondary}}><ChevronLeft size={16}/> 返回</button>
           </div>
 
           {/* Meta Info */}
           <div className="mb-4">
-            <p className="text-xs text-[#6A8C6A] font-bold mb-1">
+            <p className="text-xs font-bold mb-1" style={{color: theme.textSecondary}}>
               {new Date(currentNote.createdAt).toLocaleDateString()} 週{['日','一','二','三','四','五','六'][new Date(currentNote.createdAt).getDay()]} 下午{new Date(currentNote.createdAt).getHours() % 12}:{new Date(currentNote.createdAt).getMinutes().toString().padStart(2,'0')}
             </p>
             <input 
-              className="text-3xl font-black text-[#2C4A2C] bg-transparent outline-none w-full placeholder-[#A0BCA0]" 
+              className="text-3xl font-black bg-transparent outline-none w-full placeholder-opacity-50" 
+              style={{color: theme.text}}
+              placeholder="無標題"
               value={currentNote.title}
               onChange={(e) => {
                 const updated = {...currentNote, title: e.target.value};
@@ -513,33 +484,31 @@ export default function Home() {
             />
           </div>
 
-          {/* Audio Segments (淺綠色背景區塊) */}
+          {/* Audio Segments */}
           <div className="mb-4">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-xs font-bold text-[#6A8C6A]">錄音片段</span>
-              <span className="text-xs text-[#88A088]">共 {formatTime(currentNote.totalDuration)}</span>
+              <span className="text-xs font-bold" style={{color: theme.textSecondary}}>錄音片段</span>
+              <span className="text-xs" style={{color: theme.textTertiary}}>共 {formatTime(currentNote.totalDuration)}</span>
             </div>
             {currentNote.segments.length > 0 ? (
               <div className="space-y-2">
                 {currentNote.segments.map((seg, idx) => (
-                  // 使用 Image 1 中的淺綠色膠囊背景 #E0E8E0
-                  <div key={seg.id} className="bg-[#E0E8E0] p-4 rounded-xl flex justify-between items-center">
-                    <span className="text-sm font-bold text-[#4A7C59]">Segment {idx + 1} · {formatTime(seg.duration)}</span>
-                    <button className="p-2 bg-[#4A7C59] rounded-full text-white shadow-sm hover:scale-105 transition-transform"><Play size={14} fill="currentColor"/></button>
+                  <div key={seg.id} className="p-4 rounded-xl flex justify-between items-center" style={{backgroundColor: theme.cardBorder}}>
+                    <span className="text-sm font-bold" style={{color: theme.primary}}>Segment {idx + 1} · {formatTime(seg.duration)}</span>
+                    <button className="p-2 rounded-full text-white shadow-sm hover:scale-105 transition-transform" style={{backgroundColor: theme.primary}}><Play size={14} fill="currentColor"/></button>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[#A0BCA0] italic">目前尚無錄音片段。</p>
+              <p className="text-xs italic" style={{color: theme.textTertiary}}>目前尚無錄音片段。</p>
             )}
           </div>
 
-          {/* Text Content (白色卡片) */}
-          <div className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-[#E8F0E8] flex-1 flex flex-col mb-3 min-h-[240px]">
+          {/* Text Content */}
+          <div className="rounded-[1.5rem] p-6 shadow-sm border flex-1 flex flex-col mb-3 min-h-[240px]" style={{backgroundColor: theme.card, borderColor: theme.cardBorder}}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2">
-                 <span className="text-xs font-bold text-[#6A8C6A]">文字筆記</span>
-                 {/* Mode Selector - 可切換模式 */}
+                 <span className="text-xs font-bold" style={{color: theme.textSecondary}}>文字筆記</span>
                  <select 
                    value={currentNote.mode}
                    onChange={(e) => {
@@ -547,23 +516,18 @@ export default function Home() {
                      setCurrentNote(updated);
                      setNotes(notes.map(n => n.id === currentNote.id ? updated : n));
                    }}
-                   className="text-[10px] font-bold bg-[#E8F0E8] text-[#4A7C59] px-3 py-1 rounded-full border-none outline-none cursor-pointer"
+                   className="text-[10px] font-bold px-3 py-1 rounded-full border-none outline-none cursor-pointer"
+                   style={{backgroundColor: theme.inputBg, color: theme.primary}}
                  >
                    {MODES.map(m => (
                      <option key={m.id} value={m.id}>{m.label}</option>
                    ))}
                  </select>
               </div>
-              {/* Regenerate Button */}
-              <button 
-                onClick={regenerateNote}
-                className="text-[10px] font-bold bg-[#4A7C59] text-white px-3 py-1 rounded-full flex items-center gap-1 hover:bg-[#3A6B48] transition-colors"
-              >
-                <RotateCcw size={10}/> 重新生成
-              </button>
             </div>
             <textarea 
-              className="flex-1 w-full bg-transparent outline-none text-[#2C4A2C] leading-loose text-lg resize-none"
+              className="flex-1 w-full bg-transparent outline-none leading-loose text-lg resize-none"
+              style={{color: theme.text}}
               value={currentNote.content}
               onChange={(e) => {
                 const updated = {...currentNote, content: e.target.value};
@@ -571,35 +535,32 @@ export default function Home() {
                 setNotes(notes.map(n => n.id === currentNote.id ? updated : n));
               }}
             />
-            {/* Action Bar (複製/分享/刪除) */}
+            {/* Action Bar */}
             <div className="flex gap-2 mt-4 pt-4">
-              <button className="bg-[#E8F0E8] text-[#4A7C59] px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:bg-[#D0D8D0]" onClick={() => {navigator.clipboard.writeText(currentNote.content); alert('已複製');}}><Copy size={14}/> 複製</button>
-              <button className="bg-[#E8F0E8] text-[#4A7C59] px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:bg-[#D0D8D0]"><Share2 size={14}/> 分享</button>
+              <button className="px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:opacity-80 transition-opacity" style={{backgroundColor: theme.inputBg, color: theme.primary}} onClick={() => {navigator.clipboard.writeText(currentNote.content); alert('已複製');}}><Copy size={14}/> 複製</button>
+              <button className="px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:opacity-80 transition-opacity" style={{backgroundColor: theme.inputBg, color: theme.primary}}><Share2 size={14}/> 分享</button>
               <div className="flex-1"></div>
               <button onClick={() => deleteNote(currentNote.id)} className="bg-[#FEE2E2] text-red-500 px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:bg-[#FECACA]"><Trash2 size={14}/> 刪除</button>
             </div>
           </div>
 
-          {/* Append Button with Visualizer and Timer */}
+          {/* Append Button */}
           <div className="w-full">
-            {/* 音量視覺化器和計時器 - 追加錄音時顯示 */}
             {isRecording && (
               <div className="w-full rounded-[2rem] p-6 shadow-sm border mb-3" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
                 <div className="flex justify-between items-end mb-4">
                   <span style={{ color: theme.textTertiary }} className="text-xs font-bold tracking-widest uppercase">INPUT LEVEL</span>
                   <span style={{ color: theme.primary }} className="text-xl font-mono font-bold">{formatTime(recordingTime)}</span>
                 </div>
-                <p style={{ color: theme.textSecondary }} className="text-sm font-bold mb-2">錄音時長</p>
-                {/* 視覺化區域 */}
                 <div className="rounded-2xl h-20 w-full mb-4 flex items-center justify-center overflow-hidden" style={{ backgroundColor: theme.inputBg }}>
                   <canvas ref={homeCanvasRef} width={300} height={60} className="w-full h-full" />
                 </div>
-                <p style={{ color: theme.textTertiary }} className="text-xs leading-relaxed text-center">對著麥克風說話，如果看到長條圖跳動，就代表麥克風正常運作。</p>
               </div>
             )}
           <button 
             onClick={() => isRecording ? mediaRecorderRef.current?.stop() : startRecording(true)}
-              className={`w-full py-4 rounded-[2rem] font-bold text-lg shadow-sm flex items-center justify-center gap-2 transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-[#96C4A6] text-[#2C4A2C] hover:bg-[#85B395]'}`}
+              className={`w-full py-4 rounded-[2rem] font-bold text-lg shadow-sm flex items-center justify-center gap-2 transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'hover:opacity-90'}`}
+              style={{backgroundColor: isRecording ? '#EF4444' : theme.primaryLight, color: isRecording ? 'white' : theme.text}}
           >
             {isRecording ? <Square size={20} fill="currentColor"/> : <Plus size={20} strokeWidth={2.5}/>}
             {isRecording ? '正在追加錄音...' : '+ 追加錄音 Append'}
@@ -613,14 +574,14 @@ export default function Home() {
             <div className="flex-1 p-6 flex flex-col items-center animate-in fade-in overflow-y-auto pb-32 max-w-md mx-auto w-full">
               {/* 標題區塊 */}
               <div className="w-full mb-8 pt-4">
-                <p style={{ color: theme.textTertiary }} className="text-sm mb-1">Capture thoughts on the go</p>
-                <h1 style={{ color: theme.primary, fontFamily: 'var(--font-neoris)', fontWeight: 900 }} className="text-4xl tracking-tight mb-2">TALKING JOURNAL</h1>
-                <p style={{ color: '#666666' }} className="text-sm">將腦中的千頭萬緒化為文字</p>
+                <p style={{ color: theme.textTertiary }} className="text-sm mb-1">Clear your mind</p>
+                <h1 style={{ color: theme.primary, fontWeight: 900 }} className="text-4xl tracking-tight mb-2">The Walking Journal</h1>
+                <p style={{ color: theme.textSecondary }} className="text-sm">One step at a time</p>
               </div>
 
-              {/* Mode Selection - 支援動態主題 */}
+              {/* Mode Selection */}
               <div className="w-full mb-6">
-                <p style={{ color: '#666666' }} className="text-sm mb-3">模式</p>
+                <p style={{ color: theme.textSecondary }} className="text-sm mb-3">模式</p>
                 <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
                   {MODES.map(m => (
                     <button 
@@ -637,8 +598,7 @@ export default function Home() {
                     </button>
                   ))}
                 </div>
-                {/* 日期顯示 - 中文格式，淺黑色，靠左對齊 */}
-                <p style={{ color: '#666666' }} className="text-base mt-2 text-left font-medium">
+                <p style={{ color: theme.textSecondary }} className="text-base mt-2 text-left font-medium">
                   {new Date().toLocaleDateString('zh-TW', { 
                     year: 'numeric', 
                     month: 'long', 
@@ -648,7 +608,7 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Main Record Button - 支援動態主題 */}
+              {/* Main Record Button */}
               <div className="flex-1 flex flex-col justify-center items-center mb-4">
                 <button 
                   onClick={() => isRecording ? mediaRecorderRef.current?.stop() : startRecording(false)}
@@ -662,7 +622,7 @@ export default function Home() {
                 {status && <p style={{ color: theme.primary }} className="mt-8 font-bold animate-pulse">{status}</p>}
               </div>
 
-              {/* Input Level Card - 簡化樣式 */}
+              {/* Input Level Card */}
               <div className="w-full rounded-[2rem] p-6 shadow-sm border mb-2" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
                  <div className="flex justify-between items-end mb-4">
                     <span style={{ color: theme.textTertiary }} className="text-xs font-bold tracking-widest uppercase">INPUT LEVEL</span>
@@ -670,11 +630,10 @@ export default function Home() {
                  </div>
                  <p style={{ color: theme.textSecondary }} className="text-sm font-bold mb-2">錄音時長</p>
                  
-                 {/* 視覺化區域 - 簡化膠囊樣式 */}
                  <div className="rounded-2xl h-20 w-full mb-4 flex items-center justify-center overflow-hidden" style={{ backgroundColor: theme.inputBg }}>
                     <canvas ref={homeCanvasRef} width={300} height={60} className="w-full h-full" />
                  </div>
-                 <p style={{ color: theme.textTertiary }} className="text-xs leading-relaxed text-center">對著麥克風說話，如果看到長條圖跳動，就代表麥克風正常運作。</p>
+                 <p style={{ color: theme.textTertiary }} className="text-xs leading-relaxed text-center">Tap the microphone to start walking</p>
               </div>
             </div>
           )}
@@ -683,35 +642,36 @@ export default function Home() {
           {currentView === 'list' && (
             <div className="flex-1 p-6 pb-32 animate-in slide-in-from-right overflow-y-auto max-w-md mx-auto w-full">
               <div className="flex justify-between items-center mb-6 pt-4">
-                <h2 className="text-3xl font-black text-[#2C4A2C]">我的筆記</h2>
-                <div className="p-2 bg-white rounded-full shadow-sm text-[#4A7C59]"><ListIcon size={20}/></div>
+                <h2 className="text-3xl font-black" style={{color: theme.text}}>我的筆記</h2>
+                <div className="p-2 rounded-full shadow-sm" style={{backgroundColor: theme.card, color: theme.primary}}><ListIcon size={20}/></div>
               </div>
               
               <div className="relative mb-6">
                  <input 
-                  className="w-full bg-white rounded-2xl p-4 pl-12 shadow-sm border border-[#E8F0E8] outline-none text-[#2C4A2C] placeholder-[#A0BCA0]"
+                  className="w-full rounded-2xl p-4 pl-12 shadow-sm border outline-none placeholder-opacity-50"
+                  style={{backgroundColor: theme.card, borderColor: theme.cardBorder, color: theme.text}}
                   placeholder="搜尋筆記..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                  />
-                 <Search className="absolute left-4 top-4 text-[#A0BCA0]" size={20}/>
+                 <Search className="absolute left-4 top-4" style={{color: theme.textTertiary}} size={20}/>
               </div>
 
               <div className="space-y-4">
                 {notes.filter(n => n.title.includes(searchQuery) || n.content.includes(searchQuery)).map(n => (
-                  <div key={n.id} onClick={() => {setCurrentNote(n); setCurrentView('detail');}} className="bg-white p-5 rounded-[2rem] shadow-sm border border-transparent hover:border-[#4A7C59]/20 transition-all cursor-pointer relative group">
+                  <div key={n.id} onClick={() => {setCurrentNote(n); setCurrentView('detail');}} className="p-5 rounded-[2rem] shadow-sm border border-transparent hover:border-opacity-50 transition-all cursor-pointer relative group" style={{backgroundColor: theme.card}}>
                     <div className="flex justify-between mb-2">
-                       <span className="text-[10px] font-bold bg-[#E8F0E8] text-[#4A7C59] px-2 py-0.5 rounded uppercase">{MODES.find(m => m.id === n.mode)?.label}</span>
-                       <span className="text-[10px] text-[#88A088]">{formatTime(n.totalDuration)}</span>
+                       <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase" style={{backgroundColor: theme.inputBg, color: theme.primary}}>{MODES.find(m => m.id === n.mode)?.label}</span>
+                       <span className="text-[10px]" style={{color: theme.textTertiary}}>{formatTime(n.totalDuration)}</span>
                     </div>
-                    <h3 className="font-bold text-lg text-[#2C4A2C] line-clamp-1 mb-1">{n.title}</h3>
-                    <p className="text-sm text-[#6A8C6A] line-clamp-2 leading-relaxed">{n.content}</p>
+                    <h3 className="font-bold text-lg line-clamp-1 mb-1" style={{color: theme.text}}>{n.title}</h3>
+                    <p className="text-sm line-clamp-2 leading-relaxed" style={{color: theme.textSecondary}}>{n.content}</p>
                     <div className="absolute right-4 top-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <ChevronRight size={16} className="text-[#4A7C59]"/>
+                        <ChevronRight size={16} style={{color: theme.primary}}/>
                     </div>
                   </div>
                 ))}
-                {notes.length === 0 && <div className="text-center text-[#A0BCA0] py-10 text-sm">還沒有任何筆記<br/>試著錄下第一則語音吧！</div>}
+                {notes.length === 0 && <div className="text-center py-10 text-sm" style={{color: theme.textTertiary}}>還沒有任何筆記<br/>試著錄下第一則語音吧！</div>}
               </div>
             </div>
           )}
@@ -720,36 +680,36 @@ export default function Home() {
           {currentView === 'calendar' && (
             <div className="flex-1 p-6 pb-32 animate-in slide-in-from-right overflow-y-auto max-w-md mx-auto w-full">
                 <div className="flex justify-between items-center mb-8 pt-4">
-                    <h2 className="text-3xl font-black text-[#2C4A2C]">日曆總覽</h2>
-                    <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-full shadow-sm">
-                        <ChevronLeft className="cursor-pointer text-[#88A088] hover:text-[#4A7C59]" size={20} onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.setMonth(currentCalendarDate.getMonth()-1)))}/>
-                        <span className="text-sm font-bold text-[#2C4A2C] select-none">{currentCalendarDate.getFullYear()}年 {currentCalendarDate.getMonth()+1}月</span>
-                        <ChevronRight className="cursor-pointer text-[#88A088] hover:text-[#4A7C59]" size={20} onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.setMonth(currentCalendarDate.getMonth()+1)))}/>
+                    <h2 className="text-3xl font-black" style={{color: theme.text}}>日曆總覽</h2>
+                    <div className="flex items-center gap-2 px-3 py-1 rounded-full shadow-sm" style={{backgroundColor: theme.card}}>
+                        <ChevronLeft className="cursor-pointer hover:opacity-70" style={{color: theme.textTertiary}} size={20} onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.setMonth(currentCalendarDate.getMonth()-1)))}/>
+                        <span className="text-sm font-bold select-none" style={{color: theme.text}}>{currentCalendarDate.getFullYear()}年 {currentCalendarDate.getMonth()+1}月</span>
+                        <ChevronRight className="cursor-pointer hover:opacity-70" style={{color: theme.textTertiary}} size={20} onClick={() => setCurrentCalendarDate(new Date(currentCalendarDate.setMonth(currentCalendarDate.getMonth()+1)))}/>
                     </div>
                 </div>
-                <div className="bg-white p-6 rounded-[2.5rem] shadow-sm border border-[#E8F0E8] mb-8">
-                    <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-bold text-[#A0BCA0] mb-4">
+                <div className="p-6 rounded-[2.5rem] shadow-sm border mb-8" style={{backgroundColor: theme.card, borderColor: theme.cardBorder}}>
+                    <div className="grid grid-cols-7 gap-2 text-center text-[10px] font-bold mb-4" style={{color: theme.textTertiary}}>
                         {['日','一','二','三','四','五','六'].map(d => <div key={d}>{d}</div>)}
                     </div>
                     <div className="grid grid-cols-7 gap-2">
-                        {renderCalendarDays(currentCalendarDate, notes, selectedDateFilter, setSelectedDateFilter)}
+                        {renderCalendarDays(currentCalendarDate, notes, selectedDateFilter, setSelectedDateFilter, theme)}
                     </div>
-                    <p className="text-[10px] text-center text-[#A0BCA0] mt-4">有筆記的日期下方會出現小點</p>
+                    <p className="text-[10px] text-center mt-4" style={{color: theme.textTertiary}}>有筆記的日期下方會出現小點</p>
                 </div>
                 {selectedDateFilter && (
                     <div className="animate-in slide-in-from-bottom">
                         <div className="flex justify-between items-center mb-3 px-2">
-                            <p className="text-xs font-bold text-[#6A8C6A]">{selectedDateFilter} 的筆記</p>
-                            <button onClick={() => setSelectedDateFilter(null)}><X size={14} className="text-[#88A088]"/></button>
+                            <p className="text-xs font-bold" style={{color: theme.textSecondary}}>{selectedDateFilter} 的筆記</p>
+                            <button onClick={() => setSelectedDateFilter(null)}><X size={14} style={{color: theme.textTertiary}}/></button>
                         </div>
                         <div className="space-y-3">
                             {notes.filter(n => new Date(n.createdAt).toLocaleDateString() === selectedDateFilter).map(n => (
-                                <div key={n.id} onClick={() => {setCurrentNote(n); setCurrentView('detail');}} className="bg-white p-4 rounded-2xl shadow-sm border border-[#E8F0E8] cursor-pointer hover:border-[#4A7C59]/30">
-                                    <h4 className="font-bold text-[#2C4A2C] text-sm mb-1">{n.title}</h4>
-                                    <p className="text-xs text-[#88A088] line-clamp-1">{n.content}</p>
+                                <div key={n.id} onClick={() => {setCurrentNote(n); setCurrentView('detail');}} className="p-4 rounded-2xl shadow-sm border cursor-pointer hover:border-opacity-50" style={{backgroundColor: theme.card, borderColor: theme.cardBorder}}>
+                                    <h4 className="font-bold text-sm mb-1" style={{color: theme.text}}>{n.title}</h4>
+                                    <p className="text-xs line-clamp-1" style={{color: theme.textTertiary}}>{n.content}</p>
                                 </div>
                             ))}
-                            {notes.filter(n => new Date(n.createdAt).toLocaleDateString() === selectedDateFilter).length === 0 && <p className="text-xs text-[#A0BCA0] text-center py-2">本日無筆記</p>}
+                            {notes.filter(n => new Date(n.createdAt).toLocaleDateString() === selectedDateFilter).length === 0 && <p className="text-xs text-center py-2" style={{color: theme.textTertiary}}>本日無筆記</p>}
                         </div>
                     </div>
                 )}
@@ -763,14 +723,11 @@ export default function Home() {
                     <h2 style={{ color: theme.text }} className="text-3xl font-black mb-2">設定</h2>
                     <p style={{ color: theme.textTertiary }} className="text-sm">管理您的應用程式偏好</p>
                 </div>
-
-                {/* 主題選擇器 */}
                 <div className="mb-6 p-6 rounded-[2rem] shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
                     <div className="flex items-center gap-2 mb-4">
                         <SettingsIcon style={{ color: theme.primary }} size={20}/>
                         <h3 style={{ color: theme.text }} className="font-bold">主題配色</h3>
                     </div>
-                    <p style={{ color: theme.textSecondary }} className="text-xs mb-4">選擇您喜歡的配色方案</p>
                     <div className="grid grid-cols-3 gap-3 mb-4">
                         {(Object.keys(THEMES) as Theme[]).filter(t => t !== 'custom').map(t => (
                             <button
@@ -786,169 +743,21 @@ export default function Home() {
                                 }}
                             >
                                 <div className="text-sm font-bold mb-2">{THEMES[t].name}</div>
-                                <div className="flex gap-1">
-                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: THEMES[t].primary }}></div>
-                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: THEMES[t].textSecondary }}></div>
-                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: THEMES[t].background }}></div>
-                                </div>
                             </button>
                         ))}
                     </div>
-                    {currentTheme === 'custom' && (
-                        <div className="mt-4 p-4 rounded-xl" style={{ backgroundColor: theme.inputBg }}>
-                            <p style={{ color: theme.textSecondary }} className="text-xs mb-3 font-bold">自訂顏色（進階）</p>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="text-xs mb-1 block" style={{ color: theme.textSecondary }}>主要顏色</label>
-                                    <input 
-                                        type="color" 
-                                        value={customThemeColors.primary || theme.primary}
-                                        onChange={(e) => setCustomThemeColors({...customThemeColors, primary: e.target.value})}
-                                        className="w-full h-10 rounded-lg"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-xs mb-1 block" style={{ color: theme.textSecondary }}>背景顏色</label>
-                                    <input 
-                                        type="color" 
-                                        value={customThemeColors.background || theme.background}
-                                        onChange={(e) => setCustomThemeColors({...customThemeColors, background: e.target.value})}
-                                        className="w-full h-10 rounded-lg"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
-
-                {/* 自訂模式設定 */}
-                <div className="mb-6 p-6 rounded-[2rem] shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
-                    <div className="flex items-center gap-2 mb-4">
-                        <PenTool style={{ color: theme.primary }} size={20}/>
-                        <h3 style={{ color: theme.text }} className="font-bold">自訂模式</h3>
-                    </div>
-                    <p style={{ color: theme.textSecondary }} className="text-xs mb-4">建立您專屬的 AI 改寫風格</p>
-                    
-                    <div className="mb-4">
-                        <label className="text-xs mb-2 block font-bold" style={{ color: theme.textSecondary }}>模式名稱</label>
-                        <input 
-                            type="text"
-                            placeholder="例如：詩意風格、技術文檔..."
-                            className="w-full rounded-xl p-3 text-sm outline-none border border-transparent"
-                            style={{ 
-                                backgroundColor: theme.inputBg, 
-                                color: theme.text,
-                                borderColor: theme.cardBorder
-                            }}
-                            value={customModeName}
-                            onChange={(e) => setCustomModeName(e.target.value)}
-                        />
-                    </div>
-                    
-                    <div className="mb-4">
-                        <label className="text-xs mb-2 block font-bold" style={{ color: theme.textSecondary }}>自訂提示詞</label>
-                        <textarea 
-                            placeholder="例如：請用詩意的語言，加入比喻和意象，讓文字充滿畫面感..."
-                            className="w-full rounded-xl p-3 text-sm outline-none border border-transparent resize-none"
-                            style={{ 
-                                backgroundColor: theme.inputBg, 
-                                color: theme.text,
-                                borderColor: theme.cardBorder,
-                                minHeight: '100px'
-                            }}
-                            value={customModePrompt}
-                            onChange={(e) => setCustomModePrompt(e.target.value)}
-                        />
-                    </div>
-                    
-                    {customModeName && customModePrompt && (
-                        <div className="p-3 rounded-lg mb-4" style={{ backgroundColor: theme.inputBg }}>
-                            <p style={{ color: theme.textSecondary }} className="text-xs font-bold mb-1">預覽模式：</p>
-                            <p style={{ color: theme.text }} className="text-sm">{customModeName}</p>
-                        </div>
-                    )}
-                </div>
-
-                {/* API 設定 */}
-                <div className="mb-6 p-6 rounded-[2rem] shadow-sm border" style={{ backgroundColor: theme.card, borderColor: theme.cardBorder }}>
-                    <div className="flex items-center gap-2 mb-4">
-                        <Key style={{ color: theme.primary }} size={20}/>
-                        <h3 style={{ color: theme.text }} className="font-bold">OpenAI API 設定</h3>
-                    </div>
-                    <input 
-                        type="password"
-                        placeholder="sk-..."
-                        className="w-full rounded-xl p-3 text-sm outline-none border border-transparent mb-4"
-                        style={{ 
-                            backgroundColor: theme.inputBg, 
-                            color: theme.text,
-                            borderColor: theme.cardBorder
-                        }}
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                    />
-                    
-                    <div className="border-t my-4" style={{ borderColor: theme.cardBorder }}></div>
-                    
-                    <div className="flex items-center gap-2 mb-4">
-                        <Book style={{ color: theme.primary }} size={20}/>
-                        <h3 style={{ color: theme.text }} className="font-bold">自訂詞彙 (Context Prompt)</h3>
-                    </div>
-                    <textarea 
-                        placeholder="例如：台積電, 區塊鏈, Soft Notes..."
-                        className="w-full rounded-xl p-3 text-sm outline-none border border-transparent resize-none mb-4"
-                        style={{ 
-                            backgroundColor: theme.inputBg, 
-                            color: theme.text,
-                            borderColor: theme.cardBorder,
-                            minHeight: '80px'
-                        }}
-                        value={customVocab}
-                        onChange={(e) => setCustomVocab(e.target.value)}
-                    />
-
-                    <div className="flex items-center gap-2 mb-4">
-                        <PenTool style={{ color: theme.primary }} size={20}/>
-                        <h3 style={{ color: theme.text }} className="font-bold">自訂文風提示 (Custom Style)</h3>
-                    </div>
-                    <textarea 
-                        placeholder="例如：請模仿海明威的極簡風格..."
-                        className="w-full rounded-xl p-3 text-sm outline-none border border-transparent resize-none mb-4"
-                        style={{ 
-                            backgroundColor: theme.inputBg, 
-                            color: theme.text,
-                            borderColor: theme.cardBorder,
-                            minHeight: '80px'
-                        }}
-                        value={customStylePrompt}
-                        onChange={(e) => setCustomStylePrompt(e.target.value)}
-                    />
-
-                    <button 
-                        onClick={saveSettings}
-                        className="w-full py-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2"
-                        style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = theme.primaryHover}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = theme.primary}
-                    >
-                        <Save size={16}/> 儲存所有設定
-                    </button>
-                    <AnimatePresence>
-                        {showSettingsAlert && (
-                            <motion.div 
-                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-                                className="mt-3 text-center text-xs font-bold"
-                                style={{ color: theme.primary }}
-                            >
-                                設定已更新！
-                            </motion.div>
-                        )}
-                    </AnimatePresence>
-                </div>
+                <button 
+                    onClick={saveSettings}
+                    className="w-full py-3 rounded-xl font-bold text-sm shadow-md active:scale-95 transition-transform flex items-center justify-center gap-2"
+                    style={{ backgroundColor: theme.primary, color: '#FFFFFF' }}
+                >
+                    <Save size={16}/> 儲存所有設定
+                </button>
              </div>
           )}
 
-          {/* === 底部導航 - 支援動態主題 === */}
+          {/* === 底部導航 === */}
           <nav 
             className="fixed bottom-6 left-6 right-6 backdrop-blur-md rounded-[2rem] p-2.5 flex justify-around items-center z-50 max-w-md mx-auto border"
             style={{ 
@@ -957,84 +766,16 @@ export default function Home() {
               boxShadow: `0 10px 40px ${theme.primary}15`
             }}
           >
-            <button 
-              onClick={() => setCurrentView('record')} 
-              className="p-4 rounded-[1.5rem] transition-all"
-              style={{
-                backgroundColor: currentView === 'record' ? theme.primary : 'transparent',
-                color: currentView === 'record' ? '#FFFFFF' : theme.textTertiary,
-              }}
-              onMouseEnter={(e) => {
-                if (currentView !== 'record') {
-                  e.currentTarget.style.backgroundColor = theme.inputBg;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentView !== 'record') {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
-            >
+            <button onClick={() => setCurrentView('record')} className="p-4 rounded-[1.5rem] transition-all" style={{backgroundColor: currentView === 'record' ? theme.primary : 'transparent', color: currentView === 'record' ? '#FFFFFF' : theme.textTertiary}}>
               <Mic size={24} />
             </button>
-            <button 
-              onClick={() => setCurrentView('list')} 
-              className="p-4 rounded-[1.5rem] transition-all"
-              style={{
-                backgroundColor: (currentView === 'list' || currentView === 'detail') ? theme.primary : 'transparent',
-                color: (currentView === 'list' || currentView === 'detail') ? '#FFFFFF' : theme.textTertiary,
-              }}
-              onMouseEnter={(e) => {
-                if (currentView !== 'list' && currentView !== 'detail') {
-                  e.currentTarget.style.backgroundColor = theme.inputBg;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentView !== 'list' && currentView !== 'detail') {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
-            >
+            <button onClick={() => setCurrentView('list')} className="p-4 rounded-[1.5rem] transition-all" style={{backgroundColor: (currentView === 'list' || currentView === 'detail') ? theme.primary : 'transparent', color: (currentView === 'list' || currentView === 'detail') ? '#FFFFFF' : theme.textTertiary}}>
               <ListIcon size={24} />
             </button>
-            <button 
-              onClick={() => setCurrentView('calendar')} 
-              className="p-4 rounded-[1.5rem] transition-all"
-              style={{
-                backgroundColor: currentView === 'calendar' ? theme.primary : 'transparent',
-                color: currentView === 'calendar' ? '#FFFFFF' : theme.textTertiary,
-              }}
-              onMouseEnter={(e) => {
-                if (currentView !== 'calendar') {
-                  e.currentTarget.style.backgroundColor = theme.inputBg;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentView !== 'calendar') {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
-            >
+            <button onClick={() => setCurrentView('calendar')} className="p-4 rounded-[1.5rem] transition-all" style={{backgroundColor: currentView === 'calendar' ? theme.primary : 'transparent', color: currentView === 'calendar' ? '#FFFFFF' : theme.textTertiary}}>
               <CalendarIcon size={24} />
             </button>
-            <button 
-              onClick={() => setCurrentView('settings')} 
-              className="p-4 rounded-[1.5rem] transition-all"
-              style={{
-                backgroundColor: currentView === 'settings' ? theme.primary : 'transparent',
-                color: currentView === 'settings' ? '#FFFFFF' : theme.textTertiary,
-              }}
-              onMouseEnter={(e) => {
-                if (currentView !== 'settings') {
-                  e.currentTarget.style.backgroundColor = theme.inputBg;
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (currentView !== 'settings') {
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }
-              }}
-            >
+            <button onClick={() => setCurrentView('settings')} className="p-4 rounded-[1.5rem] transition-all" style={{backgroundColor: currentView === 'settings' ? theme.primary : 'transparent', color: currentView === 'settings' ? '#FFFFFF' : theme.textTertiary}}>
               <SettingsIcon size={24} />
             </button>
           </nav>
@@ -1044,12 +785,13 @@ export default function Home() {
   );
 }
 
-// Helper: 渲染日曆格子 (綠色版)
+// Helper: 渲染日曆格子 (支援主題)
 function renderCalendarDays(
   currentDate: Date, 
   notes: Note[], 
   selected: string | null, 
-  setSelected: (s: string | null) => void
+  setSelected: (s: string | null) => void,
+  theme: ThemeColors
 ): ReactNode[] {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -1071,12 +813,14 @@ function renderCalendarDays(
             <div 
                 key={d} 
                 onClick={() => setSelected(isSel ? null : dStr)}
-                // 綠色系的日曆樣式：選中為 #4A7C59, 有筆記的小點也是 #4A7C59
-                className={`aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-bold cursor-pointer transition-all relative 
-                ${isSel ? 'bg-[#4A7C59] text-white shadow-sm' : 'text-[#2C4A2C] hover:bg-[#E8F0E8]'}`}
+                className={`aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-bold cursor-pointer transition-all relative ${isSel ? 'shadow-sm' : 'hover:opacity-80'}`}
+                style={{
+                    backgroundColor: isSel ? theme.primary : 'transparent',
+                    color: isSel ? '#FFFFFF' : theme.text,
+                }}
             >
                 {d}
-                {hasNotes && <div className={`w-1.5 h-1.5 rounded-full mt-0.5 ${isSel ? 'bg-white' : 'bg-[#4A7C59]'}`}></div>}
+                {hasNotes && <div className="w-1.5 h-1.5 rounded-full mt-0.5" style={{backgroundColor: isSel ? '#FFFFFF' : theme.primary}}></div>}
             </div>
         );
     }
