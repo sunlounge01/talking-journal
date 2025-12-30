@@ -3,7 +3,16 @@ import OpenAI from 'openai';
 
 export async function POST(request: Request) {
   try {
-    // 1. 取得資料與 Key
+    // 1. 驗證 Content-Type
+    const contentType = request.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      return NextResponse.json(
+        { error: 'Invalid Content-Type. Expected application/json' },
+        { status: 400 }
+      );
+    }
+
+    // 2. 取得資料與 Key
     const apiKey = request.headers.get('x-openai-key') || process.env.OPENAI_API_KEY;
     if (!apiKey) return NextResponse.json({ error: 'No API Key' }, { status: 500 });
 

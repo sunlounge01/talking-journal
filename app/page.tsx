@@ -376,12 +376,16 @@ export default function Home() {
         ? customModePrompt 
         : customStylePrompt;
 
+      const rewriteHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (apiKey) {
+        rewriteHeaders['x-openai-key'] = apiKey;
+      }
+
       const rwRes = await fetch('/api/rewrite', { 
         method: 'POST', 
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(headers['x-openai-key'] && { 'x-openai-key': headers['x-openai-key'] })
-        }, 
+        headers: rewriteHeaders,
         body: JSON.stringify({ text, mode: selectedMode, customStyle: styleToUse }) 
       });
       const ai = await rwRes.json();
@@ -443,12 +447,16 @@ export default function Home() {
         ? customModePrompt 
         : customStylePrompt;
       
+      const rewriteHeaders: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (apiKey) {
+        rewriteHeaders['x-openai-key'] = apiKey;
+      }
+
       const rwRes = await fetch('/api/rewrite', { 
         method: 'POST', 
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(headers['x-openai-key'] && { 'x-openai-key': headers['x-openai-key'] })
-        }, 
+        headers: rewriteHeaders,
         body: JSON.stringify({ text: originalText, mode: currentNote.mode, customStyle: styleToUse }) 
       });
       const ai = await rwRes.json();
