@@ -228,7 +228,7 @@ export default function Home() {
     setShowSettingsAlert(true);
     setTimeout(() => setShowSettingsAlert(false), 2000);
   };
-  
+
   // 獲取當前主題顏色
   const getTheme = (): ThemeColors => {
     if (currentTheme === 'custom' && Object.keys(customThemeColors).length > 0) {
@@ -307,14 +307,12 @@ export default function Home() {
         const centerY = canvas.height / 2;
 
         for (let i = 0; i < bars; i++) {
-          // 取得音量強度 (0~1) - 使用不同的頻率區段讓視覺效果更豐富
-          const frequencyIndex = Math.floor((i / bars) * dataArray.length);
-          const value = dataArray[frequencyIndex] / 255;
+          // 取得音量強度 (0~1)
+          const value = dataArray[i % dataArray.length] / 255;
           
-          // 計算高度：基礎高度 + 音量增幅（增強幅度讓變化更明顯）
+          // 計算高度：基礎高度 + 音量增幅
           const baseHeight = 8; 
-          const maxHeight = 40; // 最大高度
-          const height = baseHeight + (value * maxHeight); 
+          const height = baseHeight + (value * 25); 
           
           // 繪製圓角矩形 (膠囊狀)
           ctx.beginPath();
@@ -326,17 +324,11 @@ export default function Home() {
             barWidth / 2
           );
           
-          // 交替顏色：根據音量動態調整
-          // 有聲音時：偶數索引用深綠，奇數索引用淺綠
-          // 無聲音時：都使用淺色
-          if (value > 0.05) {
-            // 有聲音時，根據音量調整顏色亮度
-            ctx.fillStyle = i % 2 === 0 
-              ? currentThemeColors.visualizerActive 
-              : currentThemeColors.visualizerInactive;
+          // 交替顏色：偶數索引用深綠，奇數索引用淺綠（有聲音時深綠會變高）
+          if (value > 0.1) {
+            ctx.fillStyle = i % 2 === 0 ? currentThemeColors.visualizerActive : currentThemeColors.visualizerInactive;
           } else {
-            // 無聲音時，都使用淺色
-            ctx.fillStyle = currentThemeColors.visualizerInactive;
+            ctx.fillStyle = i % 2 === 0 ? currentThemeColors.visualizerActive : currentThemeColors.visualizerInactive;
           }
           ctx.fill();
         }
@@ -383,10 +375,13 @@ export default function Home() {
       const styleToUse = selectedMode === 'custom' && customModePrompt 
         ? customModePrompt 
         : customStylePrompt;
-      
+
       const rwRes = await fetch('/api/rewrite', { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json', ...headers }, 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(headers['x-openai-key'] && { 'x-openai-key': headers['x-openai-key'] })
+        }, 
         body: JSON.stringify({ text, mode: selectedMode, customStyle: styleToUse }) 
       });
       const ai = await rwRes.json();
@@ -450,7 +445,10 @@ export default function Home() {
       
       const rwRes = await fetch('/api/rewrite', { 
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json', ...headers }, 
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(headers['x-openai-key'] && { 'x-openai-key': headers['x-openai-key'] })
+        }, 
         body: JSON.stringify({ text: originalText, mode: currentNote.mode, customStyle: styleToUse }) 
       });
       const ai = await rwRes.json();
@@ -470,15 +468,6 @@ export default function Home() {
   };
 
   const formatTime = (s: number) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
-
-  // 格式化日期為 "12月27日, 星期六" 格式
-  const formatDate = (date: Date) => {
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-    const weekday = weekdays[date.getDay()];
-    return `${month}月${day}日, ${weekday}`;
-  };
 
   // --- 介面渲染 (支援動態主題) ---
   return (
@@ -600,13 +589,13 @@ export default function Home() {
                 <p style={{ color: theme.textTertiary }} className="text-xs leading-relaxed text-center">對著麥克風說話，如果看到長條圖跳動，就代表麥克風正常運作。</p>
               </div>
             )}
-            <button 
-              onClick={() => isRecording ? mediaRecorderRef.current?.stop() : startRecording(true)}
+          <button 
+            onClick={() => isRecording ? mediaRecorderRef.current?.stop() : startRecording(true)}
               className={`w-full py-4 rounded-[2rem] font-bold text-lg shadow-sm flex items-center justify-center gap-2 transition-all ${isRecording ? 'bg-red-500 text-white animate-pulse' : 'bg-[#96C4A6] text-[#2C4A2C] hover:bg-[#85B395]'}`}
-            >
-              {isRecording ? <Square size={20} fill="currentColor"/> : <Plus size={20} strokeWidth={2.5}/>}
-              {isRecording ? '正在追加錄音...' : '+ 追加錄音 Append'}
-            </button>
+          >
+            {isRecording ? <Square size={20} fill="currentColor"/> : <Plus size={20} strokeWidth={2.5}/>}
+            {isRecording ? '正在追加錄音...' : '+ 追加錄音 Append'}
+          </button>
           </div>
         </div>
       ) : (
@@ -642,7 +631,12 @@ export default function Home() {
                 </div>
                 {/* 日期顯示 - 中文格式，淺黑色，靠左對齊 */}
                 <p style={{ color: '#666666' }} className="text-base mt-2 text-left font-medium">
-                  {formatDate(new Date())}
+                  {new Date().toLocaleDateString('zh-TW', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric',
+                    weekday: 'long'
+                  })}
                 </p>
               </div>
 
